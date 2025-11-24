@@ -5,7 +5,7 @@ import { TransactionList } from './components/TransactionList';
 import { TransactionForm } from './components/TransactionForm';
 import { CategoryManager } from './components/CategoryManager';
 import { useTransactions, type Transaction } from './hooks/useTransactions';
-import { Plus, LogOut } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import './styles/app.css';
 
 function MoneyManagerApp() {
@@ -22,14 +22,6 @@ function MoneyManagerApp() {
         <div className="header-actions">
           <button className="settings-btn" onClick={() => setIsCategoryManagerOpen(true)}>
             Categories
-          </button>
-          <button className="settings-btn" onClick={() => {
-            if (confirm('Are you sure you want to reset all data? This cannot be undone.')) {
-              localStorage.clear();
-              window.location.reload();
-            }
-          }}>
-            <LogOut size={18} />
           </button>
         </div>
       </div>
