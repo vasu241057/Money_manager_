@@ -4,6 +4,8 @@ import { Dashboard } from './components/Dashboard';
 import { TransactionList } from './components/TransactionList';
 import { TransactionForm } from './components/TransactionForm';
 import { CategoryManager } from './components/CategoryManager';
+import { AccountManager } from './components/AccountManager';
+import { AnalyticsModal } from './components/AnalyticsModal';
 import { useTransactions, type Transaction } from './hooks/useTransactions';
 import { Plus } from 'lucide-react';
 import './styles/app.css';
@@ -12,6 +14,8 @@ function MoneyManagerApp() {
   const { transactions, addTransaction, deleteTransaction } = useTransactions();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const [isAccountManagerOpen, setIsAccountManagerOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
 
@@ -20,13 +24,19 @@ function MoneyManagerApp() {
       <div className="header">
         <h2>My Wallet</h2>
         <div className="header-actions">
+          <button className="settings-btn" onClick={() => setIsAccountManagerOpen(true)}>
+            Accounts
+          </button>
           <button className="settings-btn" onClick={() => setIsCategoryManagerOpen(true)}>
             Categories
           </button>
         </div>
       </div>
       
-      <Dashboard transactions={transactions} />
+      <Dashboard 
+        transactions={transactions} 
+        onBalanceClick={() => setIsAnalyticsOpen(true)}
+      />
       
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3>Transactions</h3>
@@ -77,6 +87,17 @@ function MoneyManagerApp() {
 
       {isCategoryManagerOpen && (
         <CategoryManager onClose={() => setIsCategoryManagerOpen(false)} />
+      )}
+
+      {isAccountManagerOpen && (
+        <AccountManager onClose={() => setIsAccountManagerOpen(false)} />
+      )}
+
+      {isAnalyticsOpen && (
+        <AnalyticsModal 
+          transactions={transactions} 
+          onClose={() => setIsAnalyticsOpen(false)} 
+        />
       )}
     </Layout>
   );

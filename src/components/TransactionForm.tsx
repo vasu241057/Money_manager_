@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useCategories } from "../hooks/useCategories";
+import { useAccounts } from "../hooks/useAccounts";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { BottomSheetSelect } from "./ui/BottomSheetSelect";
@@ -16,6 +17,7 @@ interface TransactionFormProps {
 
 export function TransactionForm({ onSubmit, onClose, initialData = null }: TransactionFormProps) {
   const { categories } = useCategories();
+  const { accounts } = useAccounts();
   const [type, setType] = useState<'income' | 'expense'>(initialData?.type || "expense");
   const [amount, setAmount] = useState(initialData?.amount?.toString() || "");
   const [date, setDate] = useState(
@@ -35,7 +37,7 @@ export function TransactionForm({ onSubmit, onClose, initialData = null }: Trans
   const [subCategory, setSubCategory] = useState(
     initialData?.subCategory || ""
   );
-  const [account, setAccount] = useState(initialData?.accountId || "Cash");
+  const [account, setAccount] = useState(initialData?.accountId || accounts[0]?.name || "Cash");
   const [description, setDescription] = useState(initialData?.description || "");
 
   const handleCategoryChange = (newCategoryId: string) => {
@@ -177,11 +179,7 @@ export function TransactionForm({ onSubmit, onClose, initialData = null }: Trans
             label="Account"
             value={account}
             onChange={(e) => setAccount(e.target.value)}
-            options={[
-              { value: "Cash", label: "Cash" },
-              { value: "Bank", label: "Bank" },
-              { value: "Card", label: "Card" },
-            ]}
+            options={accounts.map(acc => ({ value: acc.name, label: acc.name }))}
           />
 
           <Input

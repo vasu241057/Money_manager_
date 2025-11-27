@@ -5,7 +5,7 @@ interface DashboardProps {
   transactions: Transaction[];
 }
 
-export function Dashboard({ transactions }: DashboardProps) {
+export function Dashboard({ transactions, onBalanceClick }: DashboardProps & { onBalanceClick?: () => void }) {
   const currentMonthTransactions = transactions.filter(t => {
     const date = new Date(t.date);
     const now = new Date();
@@ -26,7 +26,7 @@ export function Dashboard({ transactions }: DashboardProps) {
 
   return (
     <div className="dashboard">
-      <div className="balance-card">
+      <div className="balance-card" onClick={onBalanceClick}>
         <span className="label">Total Balance</span>
         <h1 className="amount">₹{totalBalance.toFixed(2)}</h1>
         <div className="stats-row">

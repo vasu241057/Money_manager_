@@ -20,6 +20,9 @@
   --accent-color: #0a84ff;
   --accent-gradient: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
   
+  --primary-color: #0a84ff;
+  --secondary-color: #5e5ce6;
+  
   --success-color: #30d158;
   --danger-color: #ff453a;
   --warning-color: #ffd60a;
