@@ -20,12 +20,14 @@ export default async function handler(req: Request) {
   }
 
   try {
+    const siteUrl = req.headers.get('origin') || req.headers.get('referer') || 'http://localhost:3000';
+    
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://money-manager-local.vercel.app', // Update with your actual domain or localhost
+        'HTTP-Referer': siteUrl,
         'X-Title': 'Money Manager Local',
       },
       body: JSON.stringify({
