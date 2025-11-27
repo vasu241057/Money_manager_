@@ -4,18 +4,24 @@ export async function analyzeSpending(transactions: Transaction[]): Promise<stri
 
 
   // Prepare a summary of transactions to send to the AI
-  // We don't want to send too much data, so let's aggregate by category
   const expenses = transactions.filter(t => t.type === 'expense');
-  const categoryMap = new Map<string, number>();
   
+  // Group by category to provide structure, but include individual transaction details (notes)
+  const expensesByCategory = new Map<string, Transaction[]>();
   expenses.forEach(t => {
-    const current = categoryMap.get(t.category) || 0;
-    categoryMap.set(t.category, current + t.amount);
+    const list = expensesByCategory.get(t.category) || [];
+    list.push(t);
+    expensesByCategory.set(t.category, list);
   });
 
-  const summary = Array.from(categoryMap.entries())
-    .map(([category, amount]) => `- ${category}: ₹${amount.toFixed(2)}`)
-    .join('\n');
+  let summary = "";
+  expensesByCategory.forEach((txs, category) => {
+    const total = txs.reduce((sum, t) => sum + t.amount, 0);
+    summary += `\nCategory: ${category} (Total: ₹${total.toFixed(2)})\n`;
+    txs.forEach(t => {
+       summary += `- ₹${t.amount.toFixed(2)}${t.description ? ` (Note: ${t.description})` : ''}\n`;
+    });
+  });
 
   const totalExpense = expenses.reduce((acc, t) => acc + t.amount, 0);
 
@@ -24,10 +30,12 @@ export async function analyzeSpending(transactions: Transaction[]): Promise<stri
     
     Total Expense: ₹${totalExpense.toFixed(2)}
     
-    Category Breakdown:
+    Detailed Breakdown:
     ${summary}
     
-    Please provide a brief, insightful analysis of the spending habits and 1-2 actionable tips to save money. Keep it friendly and concise (max 3-4 sentences).
+    Please provide a brief, insightful analysis of the spending habits and 1-2 actionable tips to save money. 
+    Pay attention to the specific notes/descriptions of the transactions to give more personalized advice.
+    Keep it friendly and concise (max 3-4 sentences).
   `;
 
   try {
