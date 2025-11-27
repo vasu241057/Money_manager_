@@ -1,4 +1,5 @@
-import { Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import '../styles/transaction-list.css';
 import type { Transaction } from '../hooks/useTransactions';
 
@@ -10,6 +11,17 @@ interface TransactionListProps {
 }
 
 export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'daily' }: TransactionListProps) {
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+
+  const toggleMonth = (key: string) => {
+    const newExpanded = new Set(expandedMonths);
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key);
+    } else {
+      newExpanded.add(key);
+    }
+    setExpandedMonths(newExpanded);
+  };
   // Group transactions
   const grouped = transactions.reduce((acc, transaction) => {
     const date = new Date(transaction.date);
@@ -59,59 +71,85 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
 
   return (
     <div className="transaction-list">
-      {sortedKeys.map(key => (
-        <div key={key} className="date-group">
-          <div className="group-header">
-            <h3 className="date-header">{formatHeader(key)}</h3>
-            {viewMode === 'monthly' && (
-              <span className="group-total">
-                {getGroupTotal(grouped[key]) < 0 ? '-' : '+'}₹{Math.abs(getGroupTotal(grouped[key])).toFixed(2)}
-              </span>
+      {sortedKeys.map(key => {
+        const isExpanded = expandedMonths.has(key);
+        const isMonthly = viewMode === 'monthly';
+        const monthInitial = isMonthly ? formatHeader(key).charAt(0) : '';
+        
+        return (
+          <div key={key} className="date-group">
+            {isMonthly ? (
+              <div 
+                className="month-card"
+                onClick={() => toggleMonth(key)}
+              >
+                <div className="chevron-icon">
+                  {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                </div>
+                <div className="month-icon">
+                  {monthInitial}
+                </div>
+                <div className="month-details">
+                  <div className="month-name">{formatHeader(key)}</div>
+                  <div className="month-info">
+                    {grouped[key].length} transaction{grouped[key].length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <span className={`month-total ${getGroupTotal(grouped[key]) < 0 ? 'expense' : 'income'}`}>
+                  {getGroupTotal(grouped[key]) < 0 ? '-' : '+'}₹{Math.abs(getGroupTotal(grouped[key])).toFixed(2)}
+                </span>
+              </div>
+            ) : (
+              <div className="group-header">
+                <h3 className="date-header">{formatHeader(key)}</h3>
+              </div>
+            )}
+            {(!isMonthly || isExpanded) && (
+              <div className="transactions">
+                {grouped[key].map(t => (
+                  <div 
+                    key={t.id} 
+                    className="transaction-item"
+                    onClick={() => onEdit(t)}
+                  >
+                    <div className="t-icon">
+                      {t.category[0]}
+                    </div>
+                    <div className="t-details">
+                      <div className="t-main">
+                        <div className="t-cat-group">
+                          <span className="t-category">{t.category}</span>
+                          {t.subCategory && <span className="t-subcategory"> / {t.subCategory}</span>}
+                        </div>
+                        <span className={`t-amount ${t.type}`}>
+                          {t.type === 'expense' ? '-' : '+'}
+                          ₹{t.amount.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="t-sub">
+                        <span className="t-account">{t.accountId || 'Cash'}</span>
+                        {t.description && <span className="t-note"> • {t.description}</span>}
+                        {viewMode === 'monthly' && (
+                          <span className="t-date"> • {new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        )}
+                      </div>
+                    </div>
+                    <button 
+                      className="delete-btn" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(t.id);
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-          <div className="transactions">
-            {grouped[key].map(t => (
-              <div 
-                key={t.id} 
-                className="transaction-item"
-                onClick={() => onEdit(t)}
-              >
-                <div className="t-icon">
-                  {t.category[0]}
-                </div>
-                <div className="t-details">
-                  <div className="t-main">
-                    <div className="t-cat-group">
-                      <span className="t-category">{t.category}</span>
-                      {t.subCategory && <span className="t-subcategory"> / {t.subCategory}</span>}
-                    </div>
-                    <span className={`t-amount ${t.type}`}>
-                      {t.type === 'expense' ? '-' : '+'}
-                      ₹{t.amount.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="t-sub">
-                    <span className="t-account">{t.accountId || 'Cash'}</span>
-                    {t.description && <span className="t-note"> • {t.description}</span>}
-                    {viewMode === 'monthly' && (
-                      <span className="t-date"> • {new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                    )}
-                  </div>
-                </div>
-                <button 
-                  className="delete-btn" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(t.id);
-                  }}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+        );
+      })}
       
       {transactions.length === 0 && (
         <div className="empty-state">
