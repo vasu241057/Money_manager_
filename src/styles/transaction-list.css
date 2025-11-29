@@ -37,7 +37,21 @@
   font-size: 14px;
   color: var(--text-secondary);
   font-weight: 500;
+  font-weight: 500;
   margin: 0;
+}
+
+.day-total {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.day-total.expense {
+  color: var(--text-primary);
+}
+
+.day-total.income {
+  color: var(--success-color);
 }
 
 .group-total {

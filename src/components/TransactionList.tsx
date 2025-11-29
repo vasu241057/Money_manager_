@@ -102,6 +102,9 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
             ) : (
               <div className="group-header">
                 <h3 className="date-header">{formatHeader(key)}</h3>
+                <span className={`day-total ${getGroupTotal(grouped[key]) < 0 ? 'expense' : 'income'}`}>
+                  {getGroupTotal(grouped[key]) < 0 ? '-' : '+'}₹{Math.abs(getGroupTotal(grouped[key])).toFixed(2)}
+                </span>
               </div>
             )}
             {(!isMonthly || isExpanded) && (
