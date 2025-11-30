@@ -20,6 +20,11 @@ interface SwipeState {
 export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'daily' }: TransactionListProps) {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [swipeState, setSwipeState] = useState<SwipeState | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  
+  // Constants for swipe behavior
+  const REVEAL_WIDTH = 80;
+  const AUTO_DELETE_THRESHOLD = 200;
 
   const toggleMonth = (key: string) => {
     const newExpanded = new Set(expandedMonths);
@@ -33,10 +38,16 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
 
   // Swipe handlers
   const handleTouchStart = (e: React.TouchEvent, id: string) => {
+    // If another item is open, close it and don't start swipe on this one immediately
+    if (openId && openId !== id) {
+      setOpenId(null);
+      return;
+    }
+
     setSwipeState({
       id,
       startX: e.touches[0].clientX,
-      currentX: 0,
+      currentX: openId === id ? REVEAL_WIDTH : 0, // Start from revealed position if already open
       isSwiping: true,
     });
   };
@@ -47,20 +58,33 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
     const currentX = e.touches[0].clientX;
     const diff = swipeState.startX - currentX;
     
-    // Only allow right-to-left swipe (positive diff)
-    if (diff > 0) {
-      setSwipeState({ ...swipeState, currentX: Math.min(diff, 100) });
+    // Calculate new position based on initial state (open or closed)
+    let newX = diff;
+    if (openId === swipeState.id) {
+      newX += REVEAL_WIDTH;
+    }
+
+    // Only allow right-to-left swipe (positive values)
+    if (newX > 0) {
+      setSwipeState({ ...swipeState, currentX: newX });
     }
   };
 
   const handleTouchEnd = () => {
     if (!swipeState) return;
     
-    const SWIPE_THRESHOLD = 80;
+    const { currentX, id } = swipeState;
     
-    if (swipeState.currentX > SWIPE_THRESHOLD) {
-      // Delete the item
-      onDelete(swipeState.id);
+    if (currentX > AUTO_DELETE_THRESHOLD) {
+      // Long swipe - Auto delete
+      onDelete(id);
+      setOpenId(null);
+    } else if (currentX > REVEAL_WIDTH / 2) {
+      // Partial swipe - Reveal delete button
+      setOpenId(id);
+    } else {
+      // Swipe cancelled - Close
+      setOpenId(null);
     }
     
     setSwipeState(null);
@@ -128,7 +152,13 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
   };
 
   const renderTransaction = (t: Transaction) => {
-    const swipeOffset = swipeState?.id === t.id ? swipeState.currentX : 0;
+    // Determine the current offset
+    let offset = 0;
+    if (swipeState?.id === t.id) {
+      offset = swipeState.currentX;
+    } else if (openId === t.id) {
+      offset = REVEAL_WIDTH;
+    }
     
     return (
       <div 
@@ -138,14 +168,28 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="swipe-delete-action">
+        <div 
+          className="swipe-delete-action"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(t.id);
+            setOpenId(null);
+          }}
+          style={{ width: Math.max(offset, REVEAL_WIDTH) }} // Expand background with swipe
+        >
           <Trash2 size={20} />
           <span>Delete</span>
         </div>
         <div 
           className="transaction-item"
-          style={{ transform: `translateX(-${swipeOffset}px)` }}
-          onClick={() => !swipeState && onEdit(t)}
+          style={{ transform: `translateX(-${offset}px)` }}
+          onClick={() => {
+            if (openId === t.id) {
+              setOpenId(null); // Close if open
+            } else if (!swipeState) {
+              onEdit(t); // Edit if closed and not swiping
+            }
+          }}
         >
           <div className="t-icon">
             {t.category[0]}
@@ -166,6 +210,7 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
               {t.description && <span className="t-note"> • {t.description}</span>}
             </div>
           </div>
+          {/* Fallback delete button for non-touch or if swipe isn't discovered */}
           <button 
             className="delete-btn" 
             onClick={(e) => {
