@@ -210,16 +210,6 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
               {t.description && <span className="t-note"> • {t.description}</span>}
             </div>
           </div>
-          {/* Fallback delete button for non-touch or if swipe isn't discovered */}
-          <button 
-            className="delete-btn" 
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(t.id);
-            }}
-          >
-            <Trash2 size={16} />
-          </button>
         </div>
       </div>
     );

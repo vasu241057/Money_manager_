@@ -244,20 +244,6 @@
   font-weight: 500;
 }
 
-.delete-btn {
-  background: none;
-  border: none;
-  color: var(--text-tertiary);
-  padding: 8px;
-  cursor: pointer;
-  opacity: 1; /* Always visible on mobile */
-  transition: color 0.2s;
-}
-
-.delete-btn:hover {
-  color: var(--danger-color);
-}
-
 .empty-state {
   text-align: center;
   color: var(--text-secondary);
