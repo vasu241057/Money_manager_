@@ -130,10 +130,43 @@
   color: var(--success-color);
 }
 
+.month-expanded-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.day-group {
+  display: flex;
+  flex-direction: column;
+}
+
 .transactions {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   overflow: hidden;
+}
+
+.transaction-item-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.swipe-delete-action {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 100px;
+  background: var(--danger-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: white;
+  font-weight: 500;
+  font-size: 14px;
 }
 
 .transaction-item {
@@ -143,7 +176,11 @@
   border-bottom: 1px solid var(--bg-tertiary);
   gap: 12px;
   position: relative;
+  background: var(--bg-secondary);
+  transition: transform 0.1s ease-out;
+  will-change: transform;
 }
+
 
 .transaction-item:last-child {
   border-bottom: none;
@@ -220,5 +257,5 @@
 .empty-state {
   text-align: center;
   color: var(--text-secondary);
-  padding: 40px 0;
+  padding: 40px 20px;
 }

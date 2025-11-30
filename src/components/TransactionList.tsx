@@ -10,8 +10,16 @@ interface TransactionListProps {
   viewMode?: 'daily' | 'monthly';
 }
 
+interface SwipeState {
+  id: string;
+  startX: number;
+  currentX: number;
+  isSwiping: boolean;
+}
+
 export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'daily' }: TransactionListProps) {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [swipeState, setSwipeState] = useState<SwipeState | null>(null);
 
   const toggleMonth = (key: string) => {
     const newExpanded = new Set(expandedMonths);
@@ -22,6 +30,42 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
     }
     setExpandedMonths(newExpanded);
   };
+
+  // Swipe handlers
+  const handleTouchStart = (e: React.TouchEvent, id: string) => {
+    setSwipeState({
+      id,
+      startX: e.touches[0].clientX,
+      currentX: 0,
+      isSwiping: true,
+    });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!swipeState || !swipeState.isSwiping) return;
+    
+    const currentX = e.touches[0].clientX;
+    const diff = swipeState.startX - currentX;
+    
+    // Only allow right-to-left swipe (positive diff)
+    if (diff > 0) {
+      setSwipeState({ ...swipeState, currentX: Math.min(diff, 100) });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!swipeState) return;
+    
+    const SWIPE_THRESHOLD = 80;
+    
+    if (swipeState.currentX > SWIPE_THRESHOLD) {
+      // Delete the item
+      onDelete(swipeState.id);
+    }
+    
+    setSwipeState(null);
+  };
+
   // Group transactions
   const grouped = transactions.reduce((acc, transaction) => {
     const date = new Date(transaction.date);
@@ -43,13 +87,9 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
     return new Date(b).getTime() - new Date(a).getTime();
   });
 
-  const formatHeader = (key: string) => {
-    if (viewMode === 'monthly') return key;
+  const formatHeader = (key: string, isMonthHeader = false) => {
+    if (isMonthHeader) return key;
     
-    // const date = new Date(key);
-    // Adjust for timezone if needed, but key is YYYY-MM-DD so local date parsing might be off if not careful.
-    // Actually, new Date('YYYY-MM-DD') is UTC. new Date(YYYY, MM, DD) is local.
-    // Let's treat the key as local date components to avoid timezone shifts.
     const [y, m, d] = key.split('-').map(Number);
     const localDate = new Date(y, m - 1, d);
 
@@ -69,12 +109,83 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
     }, 0);
   };
 
+  // Group by day within a month
+  const groupByDay = (monthTransactions: Transaction[]) => {
+    const dayGroups = monthTransactions.reduce((acc, transaction) => {
+      const date = new Date(transaction.date);
+      const key = date.toISOString().split('T')[0];
+      
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(transaction);
+      return acc;
+    }, {} as Record<string, Transaction[]>);
+
+    const sortedDayKeys = Object.keys(dayGroups).sort((a, b) => {
+      return new Date(b).getTime() - new Date(a).getTime();
+    });
+
+    return { dayGroups, sortedDayKeys };
+  };
+
+  const renderTransaction = (t: Transaction) => {
+    const swipeOffset = swipeState?.id === t.id ? swipeState.currentX : 0;
+    
+    return (
+      <div 
+        key={t.id} 
+        className="transaction-item-wrapper"
+        onTouchStart={(e) => handleTouchStart(e, t.id)}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="swipe-delete-action">
+          <Trash2 size={20} />
+          <span>Delete</span>
+        </div>
+        <div 
+          className="transaction-item"
+          style={{ transform: `translateX(-${swipeOffset}px)` }}
+          onClick={() => !swipeState && onEdit(t)}
+        >
+          <div className="t-icon">
+            {t.category[0]}
+          </div>
+          <div className="t-details">
+            <div className="t-main">
+              <div className="t-cat-group">
+                <span className="t-category">{t.category}</span>
+                {t.subCategory && <span className="t-subcategory"> / {t.subCategory}</span>}
+              </div>
+              <span className={`t-amount ${t.type}`}>
+                {t.type === 'expense' ? '-' : '+'}
+                ₹{t.amount.toFixed(2)}
+              </span>
+            </div>
+            <div className="t-sub">
+              <span className="t-account">{t.accountId || 'Cash'}</span>
+              {t.description && <span className="t-note"> • {t.description}</span>}
+            </div>
+          </div>
+          <button 
+            className="delete-btn" 
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(t.id);
+            }}
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="transaction-list">
       {sortedKeys.map(key => {
         const isExpanded = expandedMonths.has(key);
         const isMonthly = viewMode === 'monthly';
-        const monthInitial = isMonthly ? formatHeader(key).charAt(0) : '';
+        const monthInitial = isMonthly ? formatHeader(key, true).charAt(0) : '';
         
         return (
           <div key={key} className="date-group">
@@ -90,7 +201,7 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
                   {monthInitial}
                 </div>
                 <div className="month-details">
-                  <div className="month-name">{formatHeader(key)}</div>
+                  <div className="month-name">{formatHeader(key, true)}</div>
                   <div className="month-info">
                     {grouped[key].length} transaction{grouped[key].length !== 1 ? 's' : ''}
                   </div>
@@ -107,49 +218,31 @@ export function TransactionList({ transactions, onDelete, onEdit, viewMode = 'da
                 </span>
               </div>
             )}
-            {(!isMonthly || isExpanded) && (
+            {!isMonthly && (
               <div className="transactions">
-                {grouped[key].map(t => (
-                  <div 
-                    key={t.id} 
-                    className="transaction-item"
-                    onClick={() => onEdit(t)}
-                  >
-                    <div className="t-icon">
-                      {t.category[0]}
-                    </div>
-                    <div className="t-details">
-                      <div className="t-main">
-                        <div className="t-cat-group">
-                          <span className="t-category">{t.category}</span>
-                          {t.subCategory && <span className="t-subcategory"> / {t.subCategory}</span>}
-                        </div>
-                        <span className={`t-amount ${t.type}`}>
-                          {t.type === 'expense' ? '-' : '+'}
-                          ₹{t.amount.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="t-sub">
-                        <span className="t-account">{t.accountId || 'Cash'}</span>
-                        {t.description && <span className="t-note"> • {t.description}</span>}
-                        {viewMode === 'monthly' && (
-                          <span className="t-date"> • {new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                        )}
-                      </div>
-                    </div>
-                    <button 
-                      className="delete-btn" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(t.id);
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
+                {grouped[key].map(t => renderTransaction(t))}
               </div>
             )}
+            {isMonthly && isExpanded && (() => {
+              const { dayGroups, sortedDayKeys } = groupByDay(grouped[key]);
+              return (
+                <div className="month-expanded-content">
+                  {sortedDayKeys.map(dayKey => (
+                    <div key={dayKey} className="day-group">
+                      <div className="group-header">
+                        <h3 className="date-header">{formatHeader(dayKey)}</h3>
+                        <span className={`day-total ${getGroupTotal(dayGroups[dayKey]) < 0 ? 'expense' : 'income'}`}>
+                          {getGroupTotal(dayGroups[dayKey]) < 0 ? '-' : '+'}₹{Math.abs(getGroupTotal(dayGroups[dayKey])).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="transactions">
+                        {dayGroups[dayKey].map(t => renderTransaction(t))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         );
       })}
