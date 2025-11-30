@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { TransactionList } from './components/TransactionList';
@@ -6,6 +6,7 @@ import { TransactionForm } from './components/TransactionForm';
 import { CategoryManager } from './components/CategoryManager';
 import { AccountManager } from './components/AccountManager';
 import { AnalyticsModal } from './components/AnalyticsModal';
+import { SplashScreen } from './components/SplashScreen';
 import { useTransactions, type Transaction } from './hooks/useTransactions';
 import { Plus } from 'lucide-react';
 import './styles/app.css';
@@ -104,5 +105,32 @@ function MoneyManagerApp() {
 }
 
 export default function App() {
-  return <MoneyManagerApp />;
+  const [showSplash, setShowSplash] = useState(true);
+  const [isAppReady, setIsAppReady] = useState(false);
+
+  useEffect(() => {
+    // Simulate app initialization/loading
+    // In a real app, this might wait for data fetching, auth check, etc.
+    // Since our hooks are synchronous (localStorage), we're technically ready immediately.
+    // But we'll use a small timeout to ensure the render cycle is complete or simulate a check.
+    const initApp = async () => {
+      // Simulate some async work if needed, or just set ready
+      setIsAppReady(true);
+    };
+
+    initApp();
+  }, []);
+
+  return (
+    <>
+      {showSplash && (
+        <SplashScreen 
+          isAppReady={isAppReady}
+          minDuration={1000} // Configurable duration
+          onFinish={() => setShowSplash(false)} 
+        />
+      )}
+      <MoneyManagerApp />
+    </>
+  );
 }
