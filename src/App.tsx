@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { TransactionList } from './components/TransactionList';
@@ -9,8 +9,82 @@ import { AnalyticsModal } from './components/AnalyticsModal';
 import { SplashScreen } from './components/SplashScreen';
 import { useTransactions, type Transaction } from './hooks/useTransactions';
 import { usePushReminders } from './hooks/usePushReminders';
+import { DEFAULT_CATEGORIES } from './hooks/useCategories';
+import { DEFAULT_ACCOUNTS } from './hooks/useAccounts';
 import { Plus } from 'lucide-react';
 import './styles/app.css';
+
+type BackupPayload = {
+  version: 1;
+  exportedAt: string;
+  data: {
+    transactions: Transaction[];
+    categories: unknown[];
+    accounts: unknown[];
+  };
+};
+
+function parseStoredArray(raw: string | null): unknown[] | null {
+  if (raw === null) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function createBackupPayload(transactions: Transaction[]): BackupPayload {
+  const categories = parseStoredArray(window.localStorage.getItem('categories')) ?? DEFAULT_CATEGORIES;
+  const accounts = parseStoredArray(window.localStorage.getItem('accounts')) ?? DEFAULT_ACCOUNTS;
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    data: {
+      transactions,
+      categories,
+      accounts,
+    },
+  };
+}
+
+function isLocalStateEmptyForImport() {
+  const transactions = parseStoredArray(window.localStorage.getItem('transactions'));
+  const categories = parseStoredArray(window.localStorage.getItem('categories'));
+  const accounts = parseStoredArray(window.localStorage.getItem('accounts'));
+
+  const hasTransactions = Boolean(transactions && transactions.length > 0);
+  const hasCategories = Boolean(categories && categories.length > 0);
+  const hasAccounts = Boolean(accounts && accounts.length > 0);
+
+  return !(hasTransactions || hasCategories || hasAccounts);
+}
+
+function isValidBackupPayload(value: unknown): value is BackupPayload {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const payload = value as {
+    version?: unknown;
+    data?: {
+      transactions?: unknown;
+      categories?: unknown;
+      accounts?: unknown;
+    };
+  };
+
+  return (
+    payload.version === 1 &&
+    Array.isArray(payload.data?.transactions) &&
+    Array.isArray(payload.data?.categories) &&
+    Array.isArray(payload.data?.accounts)
+  );
+}
 
 function MoneyManagerApp() {
   const { transactions, addTransaction, deleteTransaction } = useTransactions();
@@ -20,13 +94,12 @@ function MoneyManagerApp() {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     isLoading: isReminderLoading,
     status: reminderStatus,
-    statusMessage: reminderStatusMessage,
     enableReminders,
     disableReminders,
-    sendTestReminder,
   } = usePushReminders();
 
   const handleReminderToggle = async () => {
@@ -36,6 +109,60 @@ function MoneyManagerApp() {
     }
 
     await enableReminders();
+  };
+
+  const handleExportJson = () => {
+    try {
+      const backupPayload = createBackupPayload(transactions);
+      const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `money-manager-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export backup:', error);
+      alert('Failed to export JSON backup.');
+    }
+  };
+
+  const handleImportButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      if (!isLocalStateEmptyForImport()) {
+        alert('Import is allowed only when current app data is empty.');
+        return;
+      }
+
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+
+      if (!isValidBackupPayload(parsed)) {
+        alert('Invalid backup file format.');
+        return;
+      }
+
+      window.localStorage.setItem('transactions', JSON.stringify(parsed.data.transactions));
+      window.localStorage.setItem('categories', JSON.stringify(parsed.data.categories));
+      window.localStorage.setItem('accounts', JSON.stringify(parsed.data.accounts));
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to import backup:', error);
+      alert('Import failed. Please use a valid backup JSON file.');
+    } finally {
+      event.target.value = '';
+    }
   };
 
   return (
@@ -56,17 +183,12 @@ function MoneyManagerApp() {
                 ? 'Reminders On'
                 : 'Reminders Off'}
           </button>
-          {reminderStatus === 'enabled' && (
-            <button
-              className="settings-btn"
-              onClick={() => {
-                void sendTestReminder();
-              }}
-              disabled={isReminderLoading}
-            >
-              Test
-            </button>
-          )}
+          <button className="settings-btn" onClick={handleExportJson}>
+            Export JSON
+          </button>
+          <button className="settings-btn" onClick={handleImportButtonClick}>
+            Import JSON
+          </button>
           <button className="settings-btn" onClick={() => setIsAccountManagerOpen(true)}>
             Accounts
           </button>
@@ -75,18 +197,15 @@ function MoneyManagerApp() {
           </button>
         </div>
       </div>
-
-      <p
-        className={`reminder-status ${
-          reminderStatus === 'enabled'
-            ? 'reminder-status-success'
-            : reminderStatus === 'blocked'
-              ? 'reminder-status-warning'
-              : ''
-        }`}
-      >
-        {reminderStatusMessage}
-      </p>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json"
+        style={{ display: 'none' }}
+        onChange={(event) => {
+          void handleImportFile(event);
+        }}
+      />
       
       <Dashboard 
         transactions={transactions} 

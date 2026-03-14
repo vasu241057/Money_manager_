@@ -8,7 +8,7 @@ export interface Category {
   subCategories: string[];
 }
 
-const DEFAULT_CATEGORIES: Category[] = [
+export const DEFAULT_CATEGORIES: Category[] = [
   { id: '1', name: 'Food', icon: 'Utensils', type: 'expense', subCategories: ['Groceries', 'Restaurants', 'Snacks'] },
   { id: '2', name: 'Transport', icon: 'Car', type: 'expense', subCategories: ['Fuel', 'Public Transport', 'Taxi'] },
   { id: '3', name: 'Shopping', icon: 'ShoppingBag', type: 'expense', subCategories: ['Clothes', 'Electronics', 'Home'] },

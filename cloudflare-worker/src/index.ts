@@ -42,6 +42,11 @@ type NodeServerFetchHandler =
 const PORT = 3000;
 const DEFAULT_ICON = '/logo.png';
 const LOG_PREFIX = '[Push/Worker]';
+const SCHEDULED_REMINDER_TIMES_IST = [
+  { hour: 1, minute: 31 }, // Temporary test slot
+  { hour: 20, minute: 0 }, // 8:00 PM IST
+  { hour: 22, minute: 0 }, // 10:00 PM IST
+];
 
 const REMINDER_PAYLOAD: PushPayload = {
   title: 'Money Manager Reminder',
@@ -292,6 +297,14 @@ async function sendScheduledReminders(env: Env) {
   }
 
   const nowIst = getIstDateParts(new Date());
+  const shouldSendNow = SCHEDULED_REMINDER_TIMES_IST.some(
+    (slot) => slot.hour === nowIst.hour && slot.minute === nowIst.minute,
+  );
+
+  if (!shouldSendNow) {
+    return;
+  }
+
   const slot = `${nowIst.year}-${nowIst.month}-${nowIst.day}-${String(nowIst.hour).padStart(2, '0')}-${String(nowIst.minute).padStart(2, '0')}`;
   console.info(`${LOG_PREFIX} scheduled trigger`, { slot, timezone: 'Asia/Kolkata' });
   await sendPushToAll(env, REMINDER_PAYLOAD, { slot });

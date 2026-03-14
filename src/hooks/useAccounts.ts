@@ -7,7 +7,7 @@ export interface Account {
   balance?: number; // Optional initial balance, can be calculated from transactions
 }
 
-const DEFAULT_ACCOUNTS: Account[] = [
+export const DEFAULT_ACCOUNTS: Account[] = [
   { id: '1', name: 'Cash', type: 'cash' },
   { id: '2', name: 'Bank Account', type: 'bank' },
 ];

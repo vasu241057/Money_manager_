@@ -15,7 +15,7 @@
   },
   "vars": {
     "ALLOWED_ORIGIN": "https://money-manager-local.vercel.app",
-    "VAPID_SUBJECT": "mailto:[EMAIL_ADDRESS]",
+    "VAPID_SUBJECT": "mailto:vasu241057@gmail.com",
     "VAPID_PUBLIC_KEY": "BK2HyJ6lypfBC6E_C_B09pGIGLF17FDtKsDyEEHm7ioDnYRLLIaoyPtBCkMdBpV4uCMFyrWSZvXyDHOrBegKXQw"
   }
 }
