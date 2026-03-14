@@ -41,6 +41,7 @@ type NodeServerFetchHandler =
 
 const PORT = 3000;
 const DEFAULT_ICON = '/logo.png';
+const LOG_PREFIX = '[Push/Worker]';
 
 const REMINDER_PAYLOAD: PushPayload = {
   title: 'Money Manager Reminder',
@@ -71,11 +72,13 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (_req, res) => {
+  console.info(`${LOG_PREFIX} health check hit`);
   res.json({ ok: true });
 });
 
 app.get('/api/push/public-key', (_req, res) => {
   const env = getEnv();
+  console.info(`${LOG_PREFIX} public key requested`);
 
   if (!env.VAPID_PUBLIC_KEY) {
     res.status(500).json({ error: 'Missing VAPID_PUBLIC_KEY.' });
@@ -88,6 +91,10 @@ app.get('/api/push/public-key', (_req, res) => {
 app.post('/api/push/subscribe', async (req, res) => {
   const env = getEnv();
   const subscription = parseSubscription((req.body || {}).subscription);
+  console.info(`${LOG_PREFIX} subscribe request`, {
+    hasSubscription: Boolean(subscription),
+    endpoint: subscription?.endpoint || null,
+  });
 
   if (!subscription) {
     res.status(400).json({ error: 'Invalid push subscription payload.' });
@@ -124,6 +131,7 @@ app.post('/api/push/subscribe', async (req, res) => {
       .run();
 
     res.json({ success: true });
+    console.info(`${LOG_PREFIX} subscribe saved`, { endpoint: subscription.endpoint });
   } catch (error) {
     console.error('Subscribe error:', error);
     res.status(500).json({ error: 'Failed to save subscription.' });
@@ -133,6 +141,7 @@ app.post('/api/push/subscribe', async (req, res) => {
 app.post('/api/push/unsubscribe', async (req, res) => {
   const env = getEnv();
   const endpoint = typeof req.body?.endpoint === 'string' ? req.body.endpoint : '';
+  console.info(`${LOG_PREFIX} unsubscribe request`, { endpoint: endpoint || null });
 
   if (!endpoint) {
     res.status(400).json({ error: 'Missing subscription endpoint.' });
@@ -151,10 +160,12 @@ app.post('/api/push/unsubscribe', async (req, res) => {
 app.post('/api/push/test', async (req, res) => {
   const env = getEnv();
   const endpoint = typeof req.body?.endpoint === 'string' ? req.body.endpoint : undefined;
+  console.info(`${LOG_PREFIX} test request`, { endpoint: endpoint || '(broadcast all)' });
 
   try {
     assertPushConfig(env);
     const sent = await sendPushToAll(env, REMINDER_PAYLOAD, { endpoint });
+    console.info(`${LOG_PREFIX} test send complete`, { sent, endpoint: endpoint || '(all)' });
 
     if (sent === 0) {
       res.status(404).json({ error: 'No active subscriptions found.' });
@@ -170,11 +181,13 @@ app.post('/api/push/test', async (req, res) => {
 
 app.post('/api/push/broadcast-transaction', async (req, res) => {
   const env = getEnv();
+  console.info(`${LOG_PREFIX} transaction broadcast request`, { body: req.body || null });
 
   try {
     assertPushConfig(env);
     const payload = createTransactionPayload(req.body);
     const sent = await sendPushToAll(env, payload);
+    console.info(`${LOG_PREFIX} transaction broadcast complete`, { sent, payload });
 
     res.json({ success: true, sent });
   } catch (error) {
@@ -200,6 +213,8 @@ function getEnv() {
 }
 
 function dispatchFetch(request: Request, env: Env, ctx: ExecutionContext) {
+  const path = new URL(request.url).pathname;
+  console.info(`${LOG_PREFIX} fetch`, { method: request.method, path });
   if (typeof nodeServer === 'function') {
     return nodeServer(request, env, ctx);
   }
@@ -278,6 +293,7 @@ async function sendScheduledReminders(env: Env) {
 
   const nowIst = getIstDateParts(new Date());
   const slot = `${nowIst.year}-${nowIst.month}-${nowIst.day}-${String(nowIst.hour).padStart(2, '0')}-${String(nowIst.minute).padStart(2, '0')}`;
+  console.info(`${LOG_PREFIX} scheduled trigger`, { slot, timezone: 'Asia/Kolkata' });
   await sendPushToAll(env, REMINDER_PAYLOAD, { slot });
 }
 
@@ -337,10 +353,19 @@ async function sendPushToAll(
       ).all<StoredSubscription>();
 
   const results = rows.results || [];
+  console.info(`${LOG_PREFIX} sendPushToAll start`, {
+    targets: results.length,
+    slot: options?.slot || null,
+    endpointFilter: options?.endpoint || null,
+  });
   let sent = 0;
+  let skipped = 0;
+  let gone = 0;
+  let failed = 0;
 
   for (const row of results) {
     if (options?.slot && row.last_sent_slot === options.slot) {
+      skipped += 1;
       continue;
     }
 
@@ -355,10 +380,17 @@ async function sendPushToAll(
     }
 
     if (status === 'gone') {
+      gone += 1;
       await deactivateSubscription(env, row.endpoint);
+      continue;
+    }
+
+    if (status === 'failed') {
+      failed += 1;
     }
   }
 
+  console.info(`${LOG_PREFIX} sendPushToAll complete`, { sent, skipped, gone, failed });
   return sent;
 }
 
@@ -376,10 +408,12 @@ async function sendPushToSubscription(
 
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload));
+    console.info(`${LOG_PREFIX} push sent`, { endpoint: row.endpoint, title: payload.title });
     return 'sent';
   } catch (error: unknown) {
     const status = getPushErrorStatus(error);
     if (status === 404 || status === 410) {
+      console.warn(`${LOG_PREFIX} push endpoint expired`, { endpoint: row.endpoint, status });
       return 'gone';
     }
 
@@ -399,10 +433,12 @@ function configureVapid(env: Env) {
     env.VAPID_PUBLIC_KEY,
     env.VAPID_PRIVATE_KEY,
   );
+  console.info(`${LOG_PREFIX} vapid config applied`, { subject: env.VAPID_SUBJECT });
   vapidCacheKey = nextKey;
 }
 
 async function deactivateSubscription(env: Env, endpoint: string) {
+  console.info(`${LOG_PREFIX} deactivate subscription`, { endpoint });
   await env.PUSH_DB.prepare(
     `
     UPDATE push_subscriptions
@@ -415,6 +451,7 @@ async function deactivateSubscription(env: Env, endpoint: string) {
 }
 
 async function setLastSentSlot(env: Env, endpoint: string, slot: string) {
+  console.info(`${LOG_PREFIX} set last sent slot`, { endpoint, slot });
   await env.PUSH_DB.prepare(
     `
     UPDATE push_subscriptions

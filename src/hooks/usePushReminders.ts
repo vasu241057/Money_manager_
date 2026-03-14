@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const API_BASE_URL = (import.meta.env.VITE_PUSH_API_BASE_URL || '').replace(/\/$/, '');
+const LOG_PREFIX = '[Push/Frontend]';
 
 type PushStatus = 'checking' | 'unsupported' | 'disabled' | 'enabled' | 'blocked';
 
@@ -72,17 +73,23 @@ function toSubscriptionPayload(subscription: PushSubscription): PushSubscription
 }
 
 async function getServiceWorkerRegistration() {
+  console.info(`${LOG_PREFIX} checking service worker registration`, { scope: '/push-sw.js' });
   const existing = await navigator.serviceWorker.getRegistration();
   if (existing) {
+    console.info(`${LOG_PREFIX} existing service worker found`, { scope: existing.scope });
     return existing;
   }
 
-  return navigator.serviceWorker.register('/push-sw.js');
+  const registration = await navigator.serviceWorker.register('/push-sw.js');
+  console.info(`${LOG_PREFIX} service worker registered`, { scope: registration.scope });
+  return registration;
 }
 
 async function getPublicKey() {
   const target = apiUrl('/api/push/public-key');
+  console.info(`${LOG_PREFIX} fetching public key`, { url: target });
   const response = await fetch(target);
+  console.info(`${LOG_PREFIX} public key response`, { status: response.status, ok: response.ok });
 
   if (!response.ok) {
     throw await buildHttpError(response, `Could not load push public key from backend: ${target}`);
@@ -103,8 +110,15 @@ export function usePushReminders() {
   const [error, setError] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
+    console.info(`${LOG_PREFIX} refreshStatus`, {
+      apiBaseUrl: API_BASE_URL || '(empty)',
+      permission: Notification.permission,
+      secureContext: window.isSecureContext,
+    });
+
     if (!isPushSupported()) {
       setStatus('unsupported');
+      console.warn(`${LOG_PREFIX} push not supported in current browser/context`);
       return;
     }
 
@@ -116,8 +130,12 @@ export function usePushReminders() {
     try {
       const registration = await getServiceWorkerRegistration();
       const existingSubscription = await registration.pushManager.getSubscription();
+      console.info(`${LOG_PREFIX} refreshStatus subscription`, {
+        hasSubscription: Boolean(existingSubscription),
+      });
       setStatus(existingSubscription ? 'enabled' : 'disabled');
     } catch {
+      console.error(`${LOG_PREFIX} refreshStatus failed`);
       setStatus('disabled');
     }
   }, []);
@@ -127,8 +145,10 @@ export function usePushReminders() {
   }, [refreshStatus]);
 
   const enableReminders = useCallback(async () => {
+    console.info(`${LOG_PREFIX} enableReminders start`);
     if (!isPushSupported()) {
       setStatus('unsupported');
+      console.warn(`${LOG_PREFIX} enableReminders aborted: unsupported`);
       return false;
     }
 
@@ -140,15 +160,19 @@ export function usePushReminders() {
 
       let permission = Notification.permission;
       if (permission === 'default') {
+        console.info(`${LOG_PREFIX} requesting notification permission`);
         permission = await Notification.requestPermission();
       }
+      console.info(`${LOG_PREFIX} permission result`, { permission });
 
       if (permission !== 'granted') {
         setStatus('blocked');
+        console.warn(`${LOG_PREFIX} enableReminders blocked by permission`, { permission });
         return false;
       }
 
       const publicKey = await getPublicKey();
+      console.info(`${LOG_PREFIX} received public key`, { length: publicKey.length });
       const existingSubscription = await registration.pushManager.getSubscription();
       const subscription =
         existingSubscription ??
@@ -156,6 +180,10 @@ export function usePushReminders() {
           userVisibleOnly: true,
           applicationServerKey: base64UrlToUint8Array(publicKey),
         }));
+      console.info(`${LOG_PREFIX} subscription ready`, {
+        reused: Boolean(existingSubscription),
+        endpoint: subscription.endpoint,
+      });
 
       const payload = {
         subscription: toSubscriptionPayload(subscription),
@@ -168,6 +196,7 @@ export function usePushReminders() {
         },
         body: JSON.stringify(payload),
       });
+      console.info(`${LOG_PREFIX} subscribe response`, { status: response.status, ok: response.ok });
 
       if (!response.ok) {
         throw await buildHttpError(response, 'Failed to save reminder subscription');
@@ -187,8 +216,10 @@ export function usePushReminders() {
   }, []);
 
   const disableReminders = useCallback(async () => {
+    console.info(`${LOG_PREFIX} disableReminders start`);
     if (!isPushSupported()) {
       setStatus('unsupported');
+      console.warn(`${LOG_PREFIX} disableReminders aborted: unsupported`);
       return false;
     }
 
@@ -211,8 +242,10 @@ export function usePushReminders() {
         },
         body: JSON.stringify({ endpoint: subscription.endpoint }),
       });
+      console.info(`${LOG_PREFIX} unsubscribe API called`, { endpoint: subscription.endpoint });
 
       await subscription.unsubscribe();
+      console.info(`${LOG_PREFIX} local subscription unsubscribed`);
       setStatus('disabled');
       return true;
     } catch (err) {
@@ -225,7 +258,9 @@ export function usePushReminders() {
   }, []);
 
   const sendTestReminder = useCallback(async () => {
+    console.info(`${LOG_PREFIX} sendTestReminder start`);
     if (!isPushSupported()) {
+      console.warn(`${LOG_PREFIX} sendTestReminder aborted: unsupported`);
       return false;
     }
 
@@ -247,6 +282,7 @@ export function usePushReminders() {
         },
         body: JSON.stringify({ endpoint: subscription.endpoint }),
       });
+      console.info(`${LOG_PREFIX} test response`, { status: response.status, ok: response.ok });
 
       if (!response.ok) {
         throw await buildHttpError(response, 'Failed to send test reminder');
