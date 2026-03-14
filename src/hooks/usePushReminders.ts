@@ -21,6 +21,22 @@ function apiUrl(path: string) {
   return `${API_BASE_URL}${path}`;
 }
 
+async function buildHttpError(response: Response, context: string) {
+  let details = '';
+
+  try {
+    const raw = await response.text();
+    if (raw) {
+      details = raw.length > 300 ? `${raw.slice(0, 300)}...` : raw;
+    }
+  } catch {
+    // Ignore body parse failures.
+  }
+
+  const suffix = details ? ` | response: ${details}` : '';
+  return new Error(`${context} (HTTP ${response.status})${suffix}`);
+}
+
 function isPushSupported() {
   return (
     window.isSecureContext &&
@@ -65,10 +81,11 @@ async function getServiceWorkerRegistration() {
 }
 
 async function getPublicKey() {
-  const response = await fetch(apiUrl('/api/push/public-key'));
+  const target = apiUrl('/api/push/public-key');
+  const response = await fetch(target);
 
   if (!response.ok) {
-    throw new Error('Could not load push public key from backend.');
+    throw await buildHttpError(response, `Could not load push public key from backend: ${target}`);
   }
 
   const data = (await response.json()) as PushServerKeyResponse;
@@ -153,13 +170,14 @@ export function usePushReminders() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save reminder subscription.');
+        throw await buildHttpError(response, 'Failed to save reminder subscription');
       }
 
       setStatus('enabled');
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not enable reminders.';
+      console.error('[Push] enableReminders failed:', err);
       setError(message);
       setStatus(Notification.permission === 'denied' ? 'blocked' : 'disabled');
       return false;
@@ -231,7 +249,7 @@ export function usePushReminders() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send test reminder.');
+        throw await buildHttpError(response, 'Failed to send test reminder');
       }
 
       return true;
