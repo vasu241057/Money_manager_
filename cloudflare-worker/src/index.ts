@@ -42,18 +42,90 @@ type NodeServerFetchHandler =
 const PORT = 3000;
 const DEFAULT_ICON = '/logo.png';
 const LOG_PREFIX = '[Push/Worker]';
+const ENABLE_15_SECOND_TEST_MODE = true;
+const TEST_BURST_COUNT_PER_MINUTE = 4;
+const TEST_BURST_INTERVAL_MS = 15_000;
 const SCHEDULED_REMINDER_TIMES_IST = [
-  { hour: 1, minute: 31 }, // Temporary test slot
   { hour: 20, minute: 0 }, // 8:00 PM IST
   { hour: 22, minute: 0 }, // 10:00 PM IST
 ];
 
-const REMINDER_PAYLOAD: PushPayload = {
-  title: 'Money Manager Reminder',
-  body: "Bro, it's time to add money.",
-  url: '/',
-  icon: DEFAULT_ICON,
-};
+const REMINDER_TITLES = [
+  'Money Manager Reminder',
+  'Daily Money Ping',
+  'Wallet Check-in',
+  'Budget Nudge',
+  'Finance Streak Alert',
+  'Aaj ka Money Check',
+  'Ledger Time',
+  'Cashflow Check',
+  'Expense Log Call',
+  'Streak Bachao',
+  'Kharcha Control Ping',
+  'Daily Entry Moment',
+  'खर्चा याद दिलाना',
+  'आज का हिसाब',
+  'Wallet Discipline Alert',
+  'Money Mode ON',
+  'Paisa Tracker Ping',
+  'Finance Focus Minute',
+  'बजट चेक करो',
+  'आमदनी-खर्चा अपडेट',
+  'Cash Diary Reminder',
+  'Saving Streak Call',
+  'Khata Update Time',
+  'कंजूसी नहीं, clarity',
+];
+
+const REMINDER_OPENERS = [
+  'Bro,',
+  'Boss mode:',
+  'Suno yaar,',
+  'Captain,',
+  'Discipline check:',
+  'Arre bhai,',
+  'Zen mode:',
+  'No excuses:',
+  'Focus warrior,',
+  'Aaj ka mission:',
+  'सुनो,',
+  'ओए चैंप,',
+  'ध्यान से,',
+  'यार,',
+  'Budget सेनापति:',
+  'Hero,',
+  'बॉस,',
+  'Discipline राजा:',
+  'शांत दिमाग,',
+  'आलस छोड़ो,',
+];
+
+const REMINDER_PROMPTS = [
+  "wallet update karo - today's entry pending.",
+  'add your daily money log right now.',
+  'kharcha aur income note karo, future-you will thank you.',
+  "sirf 30 seconds: open app and add today's numbers.",
+  "don't ghost your budget, entry daal do.",
+  'data nahi to control nahi - log it now.',
+  "ek small step: today's transaction add karo.",
+  'finance game XP chahiye? daily entry karo.',
+  'calm mind, clear money - aaj ka record daal do.',
+  'abhi karo, warna kal ka stress double hoga.',
+  'आज का हिसाब लिखो, कल वाला confusion खत्म करो।',
+  'खर्चा-आमदनी तुरंत note करो, warna budget फिसलेगा।',
+  'sirf 1 minute, app kholo aur entry pakki karo.',
+  'Aaj ka data daalo, future ka tension hatao.',
+  'बेकार scrolling बंद, पैसा tracking चालू।',
+  'khata saaf rakho, dimag half stress free ho jayega.',
+  'budget ko respect do, daily line item add karo.',
+  'आज नहीं लिखा तो कल matha-pacchi guaranteed.',
+  'paisa ka game jeetna hai? log every day.',
+  'daily entry = clarity + control + confidence.',
+];
+
+const REMINDER_MESSAGES = REMINDER_OPENERS.flatMap((opener) =>
+  REMINDER_PROMPTS.map((prompt) => `${opener} ${prompt}`),
+);
 
 let vapidCacheKey = '';
 
@@ -169,8 +241,14 @@ app.post('/api/push/test', async (req, res) => {
 
   try {
     assertPushConfig(env);
-    const sent = await sendPushToAll(env, REMINDER_PAYLOAD, { endpoint });
-    console.info(`${LOG_PREFIX} test send complete`, { sent, endpoint: endpoint || '(all)' });
+    const payload = buildRandomReminderPayload();
+    const sent = await sendPushToAll(env, payload, { endpoint });
+    console.info(`${LOG_PREFIX} test send complete`, {
+      sent,
+      endpoint: endpoint || '(all)',
+      title: payload.title,
+      body: payload.body,
+    });
 
     if (sent === 0) {
       res.status(404).json({ error: 'No active subscriptions found.' });
@@ -297,6 +375,12 @@ async function sendScheduledReminders(env: Env) {
   }
 
   const nowIst = getIstDateParts(new Date());
+
+  if (ENABLE_15_SECOND_TEST_MODE) {
+    await runFifteenSecondTestBurst(env, nowIst);
+    return;
+  }
+
   const shouldSendNow = SCHEDULED_REMINDER_TIMES_IST.some(
     (slot) => slot.hour === nowIst.hour && slot.minute === nowIst.minute,
   );
@@ -305,9 +389,38 @@ async function sendScheduledReminders(env: Env) {
     return;
   }
 
+  const payload = buildScheduledReminderPayload(nowIst);
   const slot = `${nowIst.year}-${nowIst.month}-${nowIst.day}-${String(nowIst.hour).padStart(2, '0')}-${String(nowIst.minute).padStart(2, '0')}`;
-  console.info(`${LOG_PREFIX} scheduled trigger`, { slot, timezone: 'Asia/Kolkata' });
-  await sendPushToAll(env, REMINDER_PAYLOAD, { slot });
+  console.info(`${LOG_PREFIX} scheduled trigger`, {
+    slot,
+    timezone: 'Asia/Kolkata',
+    title: payload.title,
+    body: payload.body,
+  });
+  await sendPushToAll(env, payload, { slot });
+}
+
+async function runFifteenSecondTestBurst(env: Env, nowIst: ReturnType<typeof getIstDateParts>) {
+  const minuteSlotPrefix = `${nowIst.year}-${nowIst.month}-${nowIst.day}-${String(nowIst.hour).padStart(2, '0')}-${String(nowIst.minute).padStart(2, '0')}`;
+  console.info(`${LOG_PREFIX} 15-second test burst start`, {
+    minuteSlotPrefix,
+    runs: TEST_BURST_COUNT_PER_MINUTE,
+  });
+
+  for (let index = 0; index < TEST_BURST_COUNT_PER_MINUTE; index += 1) {
+    if (index > 0) {
+      await sleep(TEST_BURST_INTERVAL_MS);
+    }
+
+    const burstSlot = `${minuteSlotPrefix}-${index}`;
+    const payload = buildRandomReminderPayload();
+    console.info(`${LOG_PREFIX} 15-second test send`, {
+      burstSlot,
+      title: payload.title,
+      body: payload.body,
+    });
+    await sendPushToAll(env, payload, { slot: burstSlot });
+  }
 }
 
 function getIstDateParts(now: Date) {
@@ -334,6 +447,59 @@ function getIstDateParts(now: Date) {
     day: mapped.get('day') || '01',
     hour: Number(mapped.get('hour') || '0'),
     minute: Number(mapped.get('minute') || '0'),
+  };
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function buildScheduledReminderPayload(nowIst: ReturnType<typeof getIstDateParts>): PushPayload {
+  const dateKey = `${nowIst.year}-${nowIst.month}-${nowIst.day}`;
+  const slotKey = `${String(nowIst.hour).padStart(2, '0')}:${String(nowIst.minute).padStart(2, '0')}`;
+  const messagePoolSize = REMINDER_MESSAGES.length;
+
+  let messageIndex = hashString(`${dateKey}|${slotKey}|body`) % messagePoolSize;
+
+  // Keep 10:00 PM and 8:00 PM reminders different on the same day.
+  if (nowIst.hour === 22 && nowIst.minute === 0) {
+    const eightPmIndex = hashString(`${dateKey}|20:00|body`) % messagePoolSize;
+    if (messageIndex === eightPmIndex) {
+      messageIndex = (messageIndex + 1) % messagePoolSize;
+    }
+  }
+
+  const titleIndex = hashString(`${dateKey}|${slotKey}|title`) % REMINDER_TITLES.length;
+
+  return {
+    title: REMINDER_TITLES[titleIndex],
+    body: REMINDER_MESSAGES[messageIndex],
+    url: '/',
+    icon: DEFAULT_ICON,
+  };
+}
+
+function buildRandomReminderPayload(): PushPayload {
+  const messageIndex = Math.floor(Math.random() * REMINDER_MESSAGES.length);
+  const titleIndex = Math.floor(Math.random() * REMINDER_TITLES.length);
+
+  return {
+    title: REMINDER_TITLES[titleIndex],
+    body: REMINDER_MESSAGES[messageIndex],
+    url: '/',
+    icon: DEFAULT_ICON,
   };
 }
 

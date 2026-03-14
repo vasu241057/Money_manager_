@@ -92,6 +92,7 @@ function MoneyManagerApp() {
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [isAccountManagerOpen, setIsAccountManagerOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -171,6 +172,18 @@ function MoneyManagerApp() {
         <h2>My Wallet</h2>
         <div className="header-actions">
           <button
+            className="settings-btn"
+            onClick={() => {
+              setIsActionsOpen((prev) => !prev);
+            }}
+          >
+            {isActionsOpen ? 'Close' : 'Actions'}
+          </button>
+        </div>
+      </div>
+      {isActionsOpen && (
+        <div className="actions-panel">
+          <button
             className={`settings-btn ${reminderStatus === 'enabled' ? 'settings-btn-active' : ''}`}
             onClick={() => {
               void handleReminderToggle();
@@ -189,14 +202,26 @@ function MoneyManagerApp() {
           <button className="settings-btn" onClick={handleImportButtonClick}>
             Import JSON
           </button>
-          <button className="settings-btn" onClick={() => setIsAccountManagerOpen(true)}>
+          <button
+            className="settings-btn"
+            onClick={() => {
+              setIsActionsOpen(false);
+              setIsAccountManagerOpen(true);
+            }}
+          >
             Accounts
           </button>
-          <button className="settings-btn" onClick={() => setIsCategoryManagerOpen(true)}>
+          <button
+            className="settings-btn"
+            onClick={() => {
+              setIsActionsOpen(false);
+              setIsCategoryManagerOpen(true);
+            }}
+          >
             Categories
           </button>
         </div>
-      </div>
+      )}
       <input
         ref={fileInputRef}
         type="file"

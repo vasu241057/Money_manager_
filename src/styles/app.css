@@ -19,6 +19,13 @@
   justify-content: flex-end;
 }
 
+.actions-panel {
+  margin-bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .settings-btn {
   background: none;
   border: 1px solid var(--bg-tertiary);
