@@ -42,9 +42,6 @@ type NodeServerFetchHandler =
 const PORT = 3000;
 const DEFAULT_ICON = '/logo.png';
 const LOG_PREFIX = '[Push/Worker]';
-const ENABLE_15_SECOND_TEST_MODE = true;
-const TEST_BURST_COUNT_PER_MINUTE = 4;
-const TEST_BURST_INTERVAL_MS = 15_000;
 const SCHEDULED_REMINDER_TIMES_IST = [
   { hour: 20, minute: 0 }, // 8:00 PM IST
   { hour: 22, minute: 0 }, // 10:00 PM IST
@@ -376,11 +373,6 @@ async function sendScheduledReminders(env: Env) {
 
   const nowIst = getIstDateParts(new Date());
 
-  if (ENABLE_15_SECOND_TEST_MODE) {
-    await runFifteenSecondTestBurst(env, nowIst);
-    return;
-  }
-
   const shouldSendNow = SCHEDULED_REMINDER_TIMES_IST.some(
     (slot) => slot.hour === nowIst.hour && slot.minute === nowIst.minute,
   );
@@ -398,29 +390,6 @@ async function sendScheduledReminders(env: Env) {
     body: payload.body,
   });
   await sendPushToAll(env, payload, { slot });
-}
-
-async function runFifteenSecondTestBurst(env: Env, nowIst: ReturnType<typeof getIstDateParts>) {
-  const minuteSlotPrefix = `${nowIst.year}-${nowIst.month}-${nowIst.day}-${String(nowIst.hour).padStart(2, '0')}-${String(nowIst.minute).padStart(2, '0')}`;
-  console.info(`${LOG_PREFIX} 15-second test burst start`, {
-    minuteSlotPrefix,
-    runs: TEST_BURST_COUNT_PER_MINUTE,
-  });
-
-  for (let index = 0; index < TEST_BURST_COUNT_PER_MINUTE; index += 1) {
-    if (index > 0) {
-      await sleep(TEST_BURST_INTERVAL_MS);
-    }
-
-    const burstSlot = `${minuteSlotPrefix}-${index}`;
-    const payload = buildRandomReminderPayload();
-    console.info(`${LOG_PREFIX} 15-second test send`, {
-      burstSlot,
-      title: payload.title,
-      body: payload.body,
-    });
-    await sendPushToAll(env, payload, { slot: burstSlot });
-  }
 }
 
 function getIstDateParts(now: Date) {
@@ -448,12 +417,6 @@ function getIstDateParts(now: Date) {
     hour: Number(mapped.get('hour') || '0'),
     minute: Number(mapped.get('minute') || '0'),
   };
-}
-
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }
 
 function hashString(value: string) {
