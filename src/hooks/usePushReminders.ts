@@ -72,6 +72,24 @@ function toSubscriptionPayload(subscription: PushSubscription): PushSubscription
   };
 }
 
+async function upsertSubscriptionOnBackend(subscription: PushSubscription) {
+  const payload = {
+    subscription: toSubscriptionPayload(subscription),
+  };
+
+  const response = await fetch(apiUrl('/api/push/subscribe'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await buildHttpError(response, 'Failed to sync reminder subscription');
+  }
+}
+
 async function getServiceWorkerRegistration() {
   console.info(`${LOG_PREFIX} checking service worker registration`, { scope: '/push-sw.js' });
   const existing = await navigator.serviceWorker.getRegistration();
@@ -133,6 +151,14 @@ export function usePushReminders() {
       console.info(`${LOG_PREFIX} refreshStatus subscription`, {
         hasSubscription: Boolean(existingSubscription),
       });
+      if (existingSubscription) {
+        try {
+          await upsertSubscriptionOnBackend(existingSubscription);
+          console.info(`${LOG_PREFIX} refreshStatus backend sync complete`);
+        } catch (error) {
+          console.error(`${LOG_PREFIX} refreshStatus backend sync failed`, error);
+        }
+      }
       setStatus(existingSubscription ? 'enabled' : 'disabled');
     } catch {
       console.error(`${LOG_PREFIX} refreshStatus failed`);
@@ -185,22 +211,8 @@ export function usePushReminders() {
         endpoint: subscription.endpoint,
       });
 
-      const payload = {
-        subscription: toSubscriptionPayload(subscription),
-      };
-
-      const response = await fetch(apiUrl('/api/push/subscribe'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-      console.info(`${LOG_PREFIX} subscribe response`, { status: response.status, ok: response.ok });
-
-      if (!response.ok) {
-        throw await buildHttpError(response, 'Failed to save reminder subscription');
-      }
+      await upsertSubscriptionOnBackend(subscription);
+      console.info(`${LOG_PREFIX} subscribe response`, { ok: true });
 
       setStatus('enabled');
       return true;
@@ -273,6 +285,13 @@ export function usePushReminders() {
 
       if (!subscription) {
         throw new Error('Enable reminders first.');
+      }
+
+      try {
+        await upsertSubscriptionOnBackend(subscription);
+        console.info(`${LOG_PREFIX} pre-test backend sync complete`);
+      } catch (error) {
+        console.warn(`${LOG_PREFIX} pre-test backend sync failed`, error);
       }
 
       const response = await fetch(apiUrl('/api/push/test'), {
