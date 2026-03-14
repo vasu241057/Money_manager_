@@ -1,73 +1,52 @@
-# React + TypeScript + Vite
+# Money Manager (PWA + Push Reminders)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This app is a React + Vite personal money manager with iPhone home-screen support and scheduled push reminders.
 
-Currently, two official plugins are available:
+## Frontend
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Run locally:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Push reminder UI
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The app now includes:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- A reminder toggle in the header (`Reminders On` / `Reminders Off`)
+- A `Test` button to trigger a test push
+- A service worker at `public/push-sw.js`
+- A web app manifest at `public/manifest.webmanifest`
+
+Reminders are configured for **8:00 PM** and **10:00 PM IST**.
+When any user creates a new transaction, a broadcast push notification is also sent.
+
+## Backend (Cloudflare Worker + Express + D1)
+
+Backend files are in [`cloudflare-worker`](./cloudflare-worker).
+
+The Worker provides:
+
+- `GET /api/push/public-key`
+- `POST /api/push/subscribe`
+- `POST /api/push/unsubscribe`
+- `POST /api/push/test`
+- `POST /api/push/broadcast-transaction`
+- Cron-based sending every 5 minutes (sends at 8 PM and 10 PM IST for all subscribers)
+
+No PostgreSQL is required for this flow.
+D1 stores only push subscription endpoints/keys (no user profiles).
+
+Use `cloudflare-worker/README.md` for full setup and deploy steps.
+
+## Frontend environment variable
+
+Create a local env file for Vite:
+
+```bash
+VITE_PUSH_API_BASE_URL=https://money-manager-push-api.<your-subdomain>.workers.dev
 ```
+
+If frontend and backend are served from the same domain, this can be left empty.

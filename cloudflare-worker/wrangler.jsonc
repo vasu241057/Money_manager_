@@ -1,0 +1,21 @@
+{
+  "name": "money-manager-push-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-03-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+  {
+    "binding": "PUSH_DB",
+    "database_name": "money-manager-push",
+    "database_id": "538ecf28-20c1-4327-b721-f2ea999ad3e5"
+  }
+],
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "vars": {
+    "ALLOWED_ORIGIN": "https://money-manager-local.vercel.app/",
+    "VAPID_SUBJECT": "mailto:[EMAIL_ADDRESS]",
+    "VAPID_PUBLIC_KEY": "BK2HyJ6lypfBC6E_C_B09pGIGLF17FDtKsDyEEHm7ioDnYRLLIaoyPtBCkMdBpV4uCMFyrWSZvXyDHOrBegKXQw"
+  }
+}

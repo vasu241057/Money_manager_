@@ -8,6 +8,7 @@ import { AccountManager } from './components/AccountManager';
 import { AnalyticsModal } from './components/AnalyticsModal';
 import { SplashScreen } from './components/SplashScreen';
 import { useTransactions, type Transaction } from './hooks/useTransactions';
+import { usePushReminders } from './hooks/usePushReminders';
 import { Plus } from 'lucide-react';
 import './styles/app.css';
 
@@ -19,12 +20,53 @@ function MoneyManagerApp() {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
+  const {
+    isLoading: isReminderLoading,
+    status: reminderStatus,
+    statusMessage: reminderStatusMessage,
+    enableReminders,
+    disableReminders,
+    sendTestReminder,
+  } = usePushReminders();
+
+  const handleReminderToggle = async () => {
+    if (reminderStatus === 'enabled') {
+      await disableReminders();
+      return;
+    }
+
+    await enableReminders();
+  };
 
   return (
     <Layout>
       <div className="header">
         <h2>My Wallet</h2>
         <div className="header-actions">
+          <button
+            className={`settings-btn ${reminderStatus === 'enabled' ? 'settings-btn-active' : ''}`}
+            onClick={() => {
+              void handleReminderToggle();
+            }}
+            disabled={isReminderLoading || reminderStatus === 'checking'}
+          >
+            {isReminderLoading
+              ? 'Working...'
+              : reminderStatus === 'enabled'
+                ? 'Reminders On'
+                : 'Reminders Off'}
+          </button>
+          {reminderStatus === 'enabled' && (
+            <button
+              className="settings-btn"
+              onClick={() => {
+                void sendTestReminder();
+              }}
+              disabled={isReminderLoading}
+            >
+              Test
+            </button>
+          )}
           <button className="settings-btn" onClick={() => setIsAccountManagerOpen(true)}>
             Accounts
           </button>
@@ -33,6 +75,18 @@ function MoneyManagerApp() {
           </button>
         </div>
       </div>
+
+      <p
+        className={`reminder-status ${
+          reminderStatus === 'enabled'
+            ? 'reminder-status-success'
+            : reminderStatus === 'blocked'
+              ? 'reminder-status-warning'
+              : ''
+        }`}
+      >
+        {reminderStatusMessage}
+      </p>
       
       <Dashboard 
         transactions={transactions} 

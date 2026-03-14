@@ -1,0 +1,19 @@
+{
+  "name": "Money Manager",
+  "short_name": "Money",
+  "description": "Track daily money flow and expenses.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#0a84ff",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
