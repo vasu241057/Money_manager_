@@ -5,10 +5,11 @@ import type { Category } from '../hooks/useCategories';
 import type { Transaction } from '../hooks/useTransactions';
 import {
   VOICE_MAX_DURATION_MS,
+  buildVoiceDraftsFromTranscript,
   getCategoryOptionsForType,
   getDefaultAccountName,
   getDefaultCategoryName,
-  parseTranscriptToDrafts,
+  learnFromFinalizedDrafts,
   transcribeVoiceAudio,
   type VoiceDraftTransaction,
 } from '../services/voiceTransactions';
@@ -103,7 +104,7 @@ export function VoiceTransactionModal({
 
       try {
         const nextTranscript = await transcribeVoiceAudio(blob);
-        const parsedDrafts = parseTranscriptToDrafts(nextTranscript, categories, accounts);
+        const parsedDrafts = await buildVoiceDraftsFromTranscript(nextTranscript, categories, accounts);
 
         if (parsedDrafts.length === 0) {
           throw new Error(
@@ -352,6 +353,7 @@ export function VoiceTransactionModal({
       } satisfies Omit<Transaction, 'id'>;
     });
 
+    learnFromFinalizedDrafts(drafts);
     onSaveTransactions(prepared);
   }, [accountOptions, accounts, categories, drafts, onSaveTransactions]);
 
