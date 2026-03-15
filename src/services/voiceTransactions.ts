@@ -142,18 +142,36 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
 
 async function buildHttpError(response: Response, context: string) {
   let details = '';
+  let messageOverride = '';
 
   try {
     const raw = await response.text();
     if (raw) {
-      details = raw.length > 500 ? `${raw.slice(0, 500)}...` : raw;
+      try {
+        const parsed = JSON.parse(raw) as { error?: unknown; details?: unknown };
+        const parsedError = typeof parsed.error === 'string' ? parsed.error : '';
+        const parsedDetails = typeof parsed.details === 'string' ? parsed.details : '';
+
+        if (parsedError) {
+          messageOverride = parsedError;
+        }
+
+        if (parsedDetails) {
+          details = parsedDetails.length > 500 ? `${parsedDetails.slice(0, 500)}...` : parsedDetails;
+        } else if (!parsedError) {
+          details = raw.length > 500 ? `${raw.slice(0, 500)}...` : raw;
+        }
+      } catch {
+        details = raw.length > 500 ? `${raw.slice(0, 500)}...` : raw;
+      }
     }
   } catch {
     // Ignore body parse failures.
   }
 
-  const suffix = details ? ` | response: ${details}` : '';
-  return new Error(`${context} (HTTP ${response.status})${suffix}`);
+  const suffix = details ? ` | details: ${details}` : '';
+  const message = messageOverride || context;
+  return new Error(`${message} (HTTP ${response.status})${suffix}`);
 }
 
 function detectType(text: string): TypeDetection {
@@ -420,8 +438,14 @@ export async function transcribeVoiceAudio(blob: Blob) {
   }
 
   const base64 = arrayBufferToBase64(await blob.arrayBuffer());
+  const endpoint = apiUrl('/api/voice/transcribe');
+  console.info('[Voice/Frontend] transcription request', {
+    endpoint,
+    mimeType: blob.type || 'audio/webm',
+    bytes: blob.size,
+  });
 
-  const response = await fetch(apiUrl('/api/voice/transcribe'), {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -430,6 +454,10 @@ export async function transcribeVoiceAudio(blob: Blob) {
       audioBase64: base64,
       mimeType: blob.type || 'audio/webm',
     }),
+  });
+  console.info('[Voice/Frontend] transcription response', {
+    status: response.status,
+    ok: response.ok,
   });
 
   if (!response.ok) {

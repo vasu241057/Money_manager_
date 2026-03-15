@@ -186,11 +186,16 @@ app.post('/api/voice/transcribe', async (req, res) => {
   }
 
   let audioBytes: Uint8Array;
+  let normalizedBase64 = '';
   try {
-    audioBytes = decodeBase64Audio(audioBase64);
+    normalizedBase64 = normalizeBase64Audio(audioBase64);
+    audioBytes = decodeBase64Audio(normalizedBase64);
   } catch (error) {
     console.error(`${VOICE_LOG_PREFIX} decode failed`, error);
-    res.status(400).json({ error: 'Invalid audio base64 payload.' });
+    res.status(400).json({
+      error: 'Invalid audio base64 payload.',
+      details: errorToMessage(error),
+    });
     return;
   }
 
@@ -208,7 +213,7 @@ app.post('/api/voice/transcribe', async (req, res) => {
 
   try {
     const input: Record<string, unknown> = {
-      audio: Array.from(audioBytes),
+      audio: normalizedBase64,
     };
     if (language) {
       input.language = language;
@@ -234,8 +239,17 @@ app.post('/api/voice/transcribe', async (req, res) => {
       model: VOICE_TRANSCRIBE_MODEL,
     });
   } catch (error) {
-    console.error(`${VOICE_LOG_PREFIX} transcription failed`, error);
-    res.status(500).json({ error: 'Failed to transcribe audio.' });
+    const details = errorToMessage(error);
+    console.error(`${VOICE_LOG_PREFIX} transcription failed`, {
+      details,
+      audioBytes: audioBytes.byteLength,
+      mimeType,
+      language: language || null,
+    });
+    res.status(500).json({
+      error: 'Failed to transcribe audio.',
+      details,
+    });
   }
 });
 
@@ -695,7 +709,7 @@ async function setLastSentSlot(env: Env, endpoint: string, slot: string) {
 }
 
 function decodeBase64Audio(rawBase64: string) {
-  const sanitized = rawBase64.replace(/^data:[^,]+,/, '').trim();
+  const sanitized = normalizeBase64Audio(rawBase64);
   const binary = atob(sanitized);
   const bytes = new Uint8Array(binary.length);
 
@@ -704,6 +718,10 @@ function decodeBase64Audio(rawBase64: string) {
   }
 
   return bytes;
+}
+
+function normalizeBase64Audio(rawBase64: string) {
+  return rawBase64.replace(/^data:[^,]+,/, '').replace(/\s+/g, '').trim();
 }
 
 function extractTranscriptionText(result: unknown) {
@@ -736,6 +754,28 @@ function extractTranscriptionText(result: unknown) {
   }
 
   return '';
+}
+
+function errorToMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (!error || typeof error !== 'object') {
+    return String(error);
+  }
+
+  const maybeMessage = (error as { message?: unknown }).message;
+  if (typeof maybeMessage === 'string' && maybeMessage.trim()) {
+    return maybeMessage;
+  }
+
+  try {
+    const serialized = JSON.stringify(error);
+    return serialized.length > 500 ? `${serialized.slice(0, 500)}...` : serialized;
+  } catch {
+    return String(error);
+  }
 }
 
 function assertPushConfig(env: Env) {
