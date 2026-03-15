@@ -17,6 +17,7 @@ import { Button } from './ui/Button';
 import '../styles/voice-transaction-modal.css';
 
 type RecordingState = 'idle' | 'recording' | 'processing' | 'review' | 'error';
+const VOICE_WAVE_BAR_COUNT = 28;
 
 interface VoiceTransactionModalProps {
   categories: Category[];
@@ -61,12 +62,21 @@ export function VoiceTransactionModal({
   const [transcript, setTranscript] = useState('');
   const [drafts, setDrafts] = useState<VoiceDraftTransaction[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [waveBars, setWaveBars] = useState<number[]>(
+    () => Array.from({ length: VOICE_WAVE_BAR_COUNT }, () => 0.12),
+  );
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const elapsedTimerRef = useRef<number | null>(null);
   const stopTimerRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const mediaSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const analyserBufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const lastWaveUpdateRef = useRef(0);
   const isClosingRef = useRef(false);
 
   const progress = Math.min(100, (elapsedMs / VOICE_MAX_DURATION_MS) * 100);
@@ -83,6 +93,110 @@ export function VoiceTransactionModal({
       stopTimerRef.current = null;
     }
   }, []);
+
+  const stopWaveVisualizer = useCallback(() => {
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (mediaSourceRef.current) {
+      mediaSourceRef.current.disconnect();
+      mediaSourceRef.current = null;
+    }
+
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
+    }
+
+    analyserBufferRef.current = null;
+
+    if (audioContextRef.current) {
+      void audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    setWaveBars(Array.from({ length: VOICE_WAVE_BAR_COUNT }, () => 0.12));
+  }, []);
+
+  const startWaveVisualizer = useCallback(
+    async (stream: MediaStream) => {
+      stopWaveVisualizer();
+
+      const audioContextConstructor =
+        window.AudioContext ||
+        (
+          window as Window &
+            typeof globalThis & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+        ).webkitAudioContext;
+
+      if (!audioContextConstructor) {
+        return;
+      }
+
+      const audioContext = new audioContextConstructor();
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.85;
+
+      const mediaSource = audioContext.createMediaStreamSource(stream);
+      mediaSource.connect(analyser);
+
+      const buffer = new Uint8Array(analyser.frequencyBinCount);
+
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+      mediaSourceRef.current = mediaSource;
+      analyserBufferRef.current = buffer;
+      lastWaveUpdateRef.current = 0;
+
+      const animate = (timestamp: number) => {
+        const activeAnalyser = analyserRef.current;
+        const activeBuffer = analyserBufferRef.current;
+
+        if (!activeAnalyser || !activeBuffer) {
+          return;
+        }
+
+        if (timestamp - lastWaveUpdateRef.current >= 33) {
+          activeAnalyser.getByteTimeDomainData(activeBuffer);
+
+          let squareSum = 0;
+          for (let index = 0; index < activeBuffer.length; index += 1) {
+            const normalized = (activeBuffer[index] - 128) / 128;
+            squareSum += normalized * normalized;
+          }
+
+          const rms = Math.sqrt(squareSum / activeBuffer.length);
+          const baseLevel = Math.min(1, rms * 3.8);
+          const phase = timestamp / 180;
+
+          setWaveBars((previous) =>
+            previous.map((_, index) => {
+              const wave = Math.sin(phase + index * 0.42);
+              const jitter = (Math.random() - 0.5) * 0.08;
+              const next = 0.12 + baseLevel * 0.9 + Math.abs(wave) * 0.2 + jitter;
+              return Math.max(0.08, Math.min(1, next));
+            }),
+          );
+
+          lastWaveUpdateRef.current = timestamp;
+        }
+
+        animationFrameRef.current = window.requestAnimationFrame(animate);
+      };
+
+      animationFrameRef.current = window.requestAnimationFrame(animate);
+    },
+    [stopWaveVisualizer],
+  );
 
   const stopActiveStream = useCallback(() => {
     if (!streamRef.current) {
@@ -150,9 +264,10 @@ export function VoiceTransactionModal({
       console.error('Failed to stop recorder:', stopError);
       setError('Could not stop recording cleanly. Please try again.');
       setRecordingState('error');
+      stopWaveVisualizer();
       stopActiveStream();
     }
-  }, [clearTimers, stopActiveStream]);
+  }, [clearTimers, stopActiveStream, stopWaveVisualizer]);
 
   const startRecording = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -201,10 +316,12 @@ export function VoiceTransactionModal({
         console.error('Recorder error:', event);
         setError('Recording failed. Please try again.');
         setRecordingState('error');
+        stopWaveVisualizer();
       };
 
       recorder.onstop = () => {
         clearTimers();
+        stopWaveVisualizer();
         stopActiveStream();
         recorderRef.current = null;
 
@@ -234,15 +351,17 @@ export function VoiceTransactionModal({
         stopRecording();
       }, VOICE_MAX_DURATION_MS);
 
+      await startWaveVisualizer(stream);
       recorder.start(1000);
       setRecordingState('recording');
     } catch (startError) {
       console.error('Start recording error:', startError);
       setError('Microphone permission denied or unavailable. Please allow microphone access and retry.');
       setRecordingState('error');
+      stopWaveVisualizer();
       stopActiveStream();
     }
-  }, [clearTimers, processAudioBlob, stopActiveStream, stopRecording]);
+  }, [clearTimers, processAudioBlob, startWaveVisualizer, stopActiveStream, stopRecording, stopWaveVisualizer]);
 
   const handleClose = useCallback(() => {
     isClosingRef.current = true;
@@ -258,8 +377,9 @@ export function VoiceTransactionModal({
     }
 
     stopActiveStream();
+    stopWaveVisualizer();
     onClose();
-  }, [clearTimers, onClose, stopActiveStream]);
+  }, [clearTimers, onClose, stopActiveStream, stopWaveVisualizer]);
 
   useEffect(() => {
     return () => {
@@ -276,8 +396,9 @@ export function VoiceTransactionModal({
       }
 
       stopActiveStream();
+      stopWaveVisualizer();
     };
-  }, [clearTimers, stopActiveStream]);
+  }, [clearTimers, stopActiveStream, stopWaveVisualizer]);
 
   const accountOptions = useMemo(
     () => accounts.map((account) => account.name),
@@ -391,6 +512,18 @@ export function VoiceTransactionModal({
             <div className="voice-timer-row">
               <strong>{formatDuration(elapsedMs)}</strong>
               <span>{formatDuration(remainingMs)} left</span>
+            </div>
+            <div className="voice-wave-shell" aria-hidden>
+              {waveBars.map((height, index) => (
+                <span
+                  key={index}
+                  className="voice-wave-bar"
+                  style={{
+                    transform: `scaleY(${height})`,
+                    opacity: 0.55 + Math.min(0.45, height * 0.45),
+                  }}
+                />
+              ))}
             </div>
             <div className="voice-progress-track">
               <div className="voice-progress-fill" style={{ width: `${progress}%` }} />
