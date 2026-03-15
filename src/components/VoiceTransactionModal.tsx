@@ -77,6 +77,7 @@ export function VoiceTransactionModal({
   const animationFrameRef = useRef<number | null>(null);
   const analyserBufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const lastWaveUpdateRef = useRef(0);
+  const smoothedLoudnessRef = useRef(0.12);
   const isClosingRef = useRef(false);
 
   const progress = Math.min(100, (elapsedMs / VOICE_MAX_DURATION_MS) * 100);
@@ -111,6 +112,7 @@ export function VoiceTransactionModal({
     }
 
     analyserBufferRef.current = null;
+    smoothedLoudnessRef.current = 0.12;
 
     if (audioContextRef.current) {
       void audioContextRef.current.close();
@@ -156,6 +158,7 @@ export function VoiceTransactionModal({
       mediaSourceRef.current = mediaSource;
       analyserBufferRef.current = buffer;
       lastWaveUpdateRef.current = 0;
+      smoothedLoudnessRef.current = 0.12;
 
       const animate = (timestamp: number) => {
         const activeAnalyser = analyserRef.current;
@@ -165,7 +168,7 @@ export function VoiceTransactionModal({
           return;
         }
 
-        if (timestamp - lastWaveUpdateRef.current >= 33) {
+        if (timestamp - lastWaveUpdateRef.current >= 40) {
           activeAnalyser.getByteTimeDomainData(activeBuffer);
 
           let squareSum = 0;
@@ -175,17 +178,12 @@ export function VoiceTransactionModal({
           }
 
           const rms = Math.sqrt(squareSum / activeBuffer.length);
-          const baseLevel = Math.min(1, rms * 3.8);
-          const phase = timestamp / 180;
+          const targetLevel = Math.max(0.08, Math.min(1, rms * 4.2));
+          const smoothed = smoothedLoudnessRef.current * 0.72 + targetLevel * 0.28;
+          smoothedLoudnessRef.current = smoothed;
 
-          setWaveBars((previous) =>
-            previous.map((_, index) => {
-              const wave = Math.sin(phase + index * 0.42);
-              const jitter = (Math.random() - 0.5) * 0.08;
-              const next = 0.12 + baseLevel * 0.9 + Math.abs(wave) * 0.2 + jitter;
-              return Math.max(0.08, Math.min(1, next));
-            }),
-          );
+          const nextBarHeight = Math.max(0.08, Math.min(1, 0.08 + smoothed * 0.92));
+          setWaveBars((previous) => [...previous.slice(1), nextBarHeight]);
 
           lastWaveUpdateRef.current = timestamp;
         }
