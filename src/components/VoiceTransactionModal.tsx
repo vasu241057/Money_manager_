@@ -17,7 +17,7 @@ import { Button } from './ui/Button';
 import '../styles/voice-transaction-modal.css';
 
 type RecordingState = 'idle' | 'recording' | 'processing' | 'review' | 'error';
-const VOICE_WAVE_BAR_COUNT = 28;
+const VOICE_WAVE_BAR_COUNT = 96;
 
 interface VoiceTransactionModalProps {
   categories: Category[];
@@ -63,7 +63,7 @@ export function VoiceTransactionModal({
   const [drafts, setDrafts] = useState<VoiceDraftTransaction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [waveBars, setWaveBars] = useState<number[]>(
-    () => Array.from({ length: VOICE_WAVE_BAR_COUNT }, () => 0.12),
+    () => Array.from({ length: VOICE_WAVE_BAR_COUNT }, () => 0.05),
   );
 
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -77,7 +77,7 @@ export function VoiceTransactionModal({
   const animationFrameRef = useRef<number | null>(null);
   const analyserBufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const lastWaveUpdateRef = useRef(0);
-  const smoothedLoudnessRef = useRef(0.12);
+  const smoothedLoudnessRef = useRef(0.05);
   const isClosingRef = useRef(false);
 
   const progress = Math.min(100, (elapsedMs / VOICE_MAX_DURATION_MS) * 100);
@@ -112,14 +112,14 @@ export function VoiceTransactionModal({
     }
 
     analyserBufferRef.current = null;
-    smoothedLoudnessRef.current = 0.12;
+    smoothedLoudnessRef.current = 0.05;
 
     if (audioContextRef.current) {
       void audioContextRef.current.close();
       audioContextRef.current = null;
     }
 
-    setWaveBars(Array.from({ length: VOICE_WAVE_BAR_COUNT }, () => 0.12));
+    setWaveBars(Array.from({ length: VOICE_WAVE_BAR_COUNT }, () => 0.05));
   }, []);
 
   const startWaveVisualizer = useCallback(
@@ -158,7 +158,7 @@ export function VoiceTransactionModal({
       mediaSourceRef.current = mediaSource;
       analyserBufferRef.current = buffer;
       lastWaveUpdateRef.current = 0;
-      smoothedLoudnessRef.current = 0.12;
+      smoothedLoudnessRef.current = 0.05;
 
       const animate = (timestamp: number) => {
         const activeAnalyser = analyserRef.current;
@@ -168,7 +168,7 @@ export function VoiceTransactionModal({
           return;
         }
 
-        if (timestamp - lastWaveUpdateRef.current >= 40) {
+        if (timestamp - lastWaveUpdateRef.current >= 32) {
           activeAnalyser.getByteTimeDomainData(activeBuffer);
 
           let squareSum = 0;
@@ -178,11 +178,11 @@ export function VoiceTransactionModal({
           }
 
           const rms = Math.sqrt(squareSum / activeBuffer.length);
-          const targetLevel = Math.max(0.08, Math.min(1, rms * 4.2));
-          const smoothed = smoothedLoudnessRef.current * 0.72 + targetLevel * 0.28;
+          const targetLevel = Math.max(0.03, Math.min(1, rms * 4.8));
+          const smoothed = smoothedLoudnessRef.current * 0.7 + targetLevel * 0.3;
           smoothedLoudnessRef.current = smoothed;
 
-          const nextBarHeight = Math.max(0.08, Math.min(1, 0.08 + smoothed * 0.92));
+          const nextBarHeight = Math.max(0.03, Math.min(1, smoothed));
           setWaveBars((previous) => [...previous.slice(1), nextBarHeight]);
 
           lastWaveUpdateRef.current = timestamp;
@@ -512,16 +512,28 @@ export function VoiceTransactionModal({
               <span>{formatDuration(remainingMs)} left</span>
             </div>
             <div className="voice-wave-shell" aria-hidden>
-              {waveBars.map((height, index) => (
-                <span
-                  key={index}
-                  className="voice-wave-bar"
-                  style={{
-                    transform: `scaleY(${height})`,
-                    opacity: 0.55 + Math.min(0.45, height * 0.45),
-                  }}
-                />
-              ))}
+              <div className="voice-wave-baseline" />
+              <div
+                className="voice-wave-bars"
+                style={{ gridTemplateColumns: `repeat(${waveBars.length}, minmax(0, 1fr))` }}
+              >
+                {waveBars.map((height, index) => {
+                  const ageRatio = (index + 1) / waveBars.length;
+                  const heightPx = Math.round(2 + height * 38);
+                  const opacity = Math.min(1, 0.2 + ageRatio * 0.55 + Math.min(0.25, height * 0.3));
+
+                  return (
+                    <span
+                      key={index}
+                      className="voice-wave-bar"
+                      style={{
+                        height: `${heightPx}px`,
+                        opacity,
+                      }}
+                    />
+                  );
+                })}
+              </div>
             </div>
             <div className="voice-progress-track">
               <div className="voice-progress-fill" style={{ width: `${progress}%` }} />
