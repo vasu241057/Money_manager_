@@ -7,11 +7,12 @@ import { CategoryManager } from './components/CategoryManager';
 import { AccountManager } from './components/AccountManager';
 import { AnalyticsModal } from './components/AnalyticsModal';
 import { SplashScreen } from './components/SplashScreen';
+import { VoiceTransactionModal } from './components/VoiceTransactionModal';
 import { useTransactions, type Transaction } from './hooks/useTransactions';
 import { usePushReminders } from './hooks/usePushReminders';
-import { DEFAULT_CATEGORIES } from './hooks/useCategories';
-import { DEFAULT_ACCOUNTS } from './hooks/useAccounts';
-import { Plus } from 'lucide-react';
+import { DEFAULT_CATEGORIES, useCategories } from './hooks/useCategories';
+import { DEFAULT_ACCOUNTS, useAccounts } from './hooks/useAccounts';
+import { Mic, Plus } from 'lucide-react';
 import './styles/app.css';
 
 type BackupPayload = {
@@ -88,7 +89,10 @@ function isValidBackupPayload(value: unknown): value is BackupPayload {
 
 function MoneyManagerApp() {
   const { transactions, addTransaction, deleteTransaction } = useTransactions();
+  const { categories } = useCategories();
+  const { accounts } = useAccounts();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [isAccountManagerOpen, setIsAccountManagerOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
@@ -272,6 +276,15 @@ function MoneyManagerApp() {
         <Plus size={24} />
       </button>
 
+      <button
+        className="fab voice-fab"
+        onClick={() => {
+          setIsVoiceModalOpen(true);
+        }}
+      >
+        <Mic size={22} />
+      </button>
+
       {isFormOpen && (
         <TransactionForm 
           key={editingTransaction?.id ?? 'new'}
@@ -296,6 +309,20 @@ function MoneyManagerApp() {
         <AnalyticsModal 
           transactions={transactions} 
           onClose={() => setIsAnalyticsOpen(false)} 
+        />
+      )}
+
+      {isVoiceModalOpen && (
+        <VoiceTransactionModal
+          categories={categories}
+          accounts={accounts}
+          onClose={() => setIsVoiceModalOpen(false)}
+          onSaveTransactions={(voiceTransactions) => {
+            for (const voiceTransaction of voiceTransactions) {
+              addTransaction(voiceTransaction);
+            }
+            setIsVoiceModalOpen(false);
+          }}
         />
       )}
     </Layout>

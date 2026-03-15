@@ -3,6 +3,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-03-14",
   "compatibility_flags": ["nodejs_compat"],
+  "ai": {
+    "binding": "AI"
+  },
   "d1_databases": [
   {
     "binding": "PUSH_DB",

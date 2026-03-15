@@ -3,8 +3,13 @@ import { httpServerHandler } from 'cloudflare:node';
 import express from 'express';
 import webpush from 'web-push';
 
+type WorkersAiBinding = {
+  run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
+};
+
 type Env = {
   PUSH_DB: D1Database;
+  AI?: WorkersAiBinding;
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
   VAPID_SUBJECT: string;
@@ -42,6 +47,9 @@ type NodeServerFetchHandler =
 const PORT = 3000;
 const DEFAULT_ICON = '/logo.png';
 const LOG_PREFIX = '[Push/Worker]';
+const VOICE_LOG_PREFIX = '[Voice/Worker]';
+const VOICE_TRANSCRIBE_MODEL = '@cf/openai/whisper-large-v3-turbo';
+const VOICE_MAX_AUDIO_BYTES = 12 * 1024 * 1024;
 const SCHEDULED_REMINDER_TIMES_IST = [
   { hour: 20, minute: 0 }, // 8:00 PM IST
   { hour: 22, minute: 0 }, // 10:00 PM IST
@@ -127,7 +135,7 @@ const REMINDER_MESSAGES = REMINDER_OPENERS.flatMap((opener) =>
 let vapidCacheKey = '';
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 
 app.use((req, res, next) => {
   const env = getEnv();
@@ -148,6 +156,87 @@ app.use((req, res, next) => {
 app.get('/health', (_req, res) => {
   console.info(`${LOG_PREFIX} health check hit`);
   res.json({ ok: true });
+});
+
+app.post('/api/voice/transcribe', async (req, res) => {
+  const env = getEnv();
+  const body = (req.body || {}) as {
+    audioBase64?: unknown;
+    mimeType?: unknown;
+    language?: unknown;
+  };
+  const audioBase64 = typeof body.audioBase64 === 'string' ? body.audioBase64 : '';
+  const mimeType = typeof body.mimeType === 'string' ? body.mimeType : 'unknown';
+  const language = typeof body.language === 'string' ? body.language.trim() : '';
+
+  console.info(`${VOICE_LOG_PREFIX} transcribe request`, {
+    hasAudio: Boolean(audioBase64),
+    mimeType,
+    language: language || null,
+  });
+
+  if (!audioBase64) {
+    res.status(400).json({ error: 'Missing audioBase64 in request body.' });
+    return;
+  }
+
+  if (!env.AI) {
+    res.status(500).json({ error: 'AI binding is missing. Add Workers AI binding to wrangler config.' });
+    return;
+  }
+
+  let audioBytes: Uint8Array;
+  try {
+    audioBytes = decodeBase64Audio(audioBase64);
+  } catch (error) {
+    console.error(`${VOICE_LOG_PREFIX} decode failed`, error);
+    res.status(400).json({ error: 'Invalid audio base64 payload.' });
+    return;
+  }
+
+  if (audioBytes.byteLength === 0) {
+    res.status(400).json({ error: 'Audio payload is empty.' });
+    return;
+  }
+
+  if (audioBytes.byteLength > VOICE_MAX_AUDIO_BYTES) {
+    res.status(413).json({
+      error: `Audio payload is too large. Max ${VOICE_MAX_AUDIO_BYTES} bytes is supported.`,
+    });
+    return;
+  }
+
+  try {
+    const input: Record<string, unknown> = {
+      audio: Array.from(audioBytes),
+    };
+    if (language) {
+      input.language = language;
+    }
+
+    const result = await env.AI.run(VOICE_TRANSCRIBE_MODEL, input);
+    const transcript = extractTranscriptionText(result);
+
+    if (!transcript) {
+      console.error(`${VOICE_LOG_PREFIX} empty transcript result`, { result });
+      res.status(502).json({ error: 'Transcription did not return any text.' });
+      return;
+    }
+
+    console.info(`${VOICE_LOG_PREFIX} transcribe success`, {
+      model: VOICE_TRANSCRIBE_MODEL,
+      transcriptChars: transcript.length,
+    });
+
+    res.json({
+      success: true,
+      transcript,
+      model: VOICE_TRANSCRIBE_MODEL,
+    });
+  } catch (error) {
+    console.error(`${VOICE_LOG_PREFIX} transcription failed`, error);
+    res.status(500).json({ error: 'Failed to transcribe audio.' });
+  }
 });
 
 app.get('/api/push/public-key', (_req, res) => {
@@ -603,6 +692,50 @@ async function setLastSentSlot(env: Env, endpoint: string, slot: string) {
   )
     .bind(slot, new Date().toISOString(), endpoint)
     .run();
+}
+
+function decodeBase64Audio(rawBase64: string) {
+  const sanitized = rawBase64.replace(/^data:[^,]+,/, '').trim();
+  const binary = atob(sanitized);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+function extractTranscriptionText(result: unknown) {
+  const candidate = result as {
+    text?: unknown;
+    transcript?: unknown;
+    result?: {
+      text?: unknown;
+      transcript?: unknown;
+    };
+    response?: {
+      text?: unknown;
+      transcript?: unknown;
+    };
+  };
+
+  const possible = [
+    candidate?.text,
+    candidate?.transcript,
+    candidate?.result?.text,
+    candidate?.result?.transcript,
+    candidate?.response?.text,
+    candidate?.response?.transcript,
+  ];
+
+  for (const value of possible) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return '';
 }
 
 function assertPushConfig(env: Env) {

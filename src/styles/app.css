@@ -119,10 +119,20 @@
   transform: scale(0.9);
 }
 
+.voice-fab {
+  right: 92px;
+  background: #34c759;
+  box-shadow: 0 4px 16px rgba(52, 199, 89, 0.4);
+}
+
 /* Mobile constraint for FAB */
 @media (min-width: 480px) {
   .fab {
     right: calc(50% - 240px + 24px);
+  }
+
+  .voice-fab {
+    right: calc(50% - 240px + 92px);
   }
 }
 

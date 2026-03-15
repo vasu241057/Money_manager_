@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "data": {
+    "transactions": [],
+    "categories": [
+      {
+        "id": "cat-food",
+        "name": "Food",
+        "icon": "Utensils",
+        "type": "expense",
+        "subCategories": [
+          "Breakfast",
+          "Lunch",
+          "Dinner",
+          "Groceries",
+          "Restaurants",
+          "Snacks"
+        ]
+      },
+      {
+        "id": "cat-transport",
+        "name": "Transport",
+        "icon": "Car",
+        "type": "expense",
+        "subCategories": [
+          "Airport",
+          "Cab",
+          "Auto",
+          "Fuel",
+          "Public Transport",
+          "Taxi"
+        ]
+      },
+      {
+        "id": "cat-shopping",
+        "name": "Shopping",
+        "icon": "ShoppingBag",
+        "type": "expense",
+        "subCategories": [
+          "Clothes",
+          "Electronics",
+          "Home"
+        ]
+      },
+      {
+        "id": "cat-entertainment",
+        "name": "Entertainment",
+        "icon": "Film",
+        "type": "expense",
+        "subCategories": [
+          "Movies",
+          "Games",
+          "Events"
+        ]
+      },
+      {
+        "id": "cat-bills",
+        "name": "Bills",
+        "icon": "Receipt",
+        "type": "expense",
+        "subCategories": [
+          "Electricity",
+          "Water",
+          "Internet"
+        ]
+      },
+      {
+        "id": "cat-health",
+        "name": "Health",
+        "icon": "HeartPulse",
+        "type": "expense",
+        "subCategories": [
+          "Doctor",
+          "Medicine",
+          "Fitness"
+        ]
+      },
+      {
+        "id": "cat-salary",
+        "name": "Salary",
+        "icon": "Briefcase",
+        "type": "income",
+        "subCategories": [
+          "Full-time",
+          "Freelance"
+        ]
+      },
+      {
+        "id": "cat-investment",
+        "name": "Investment",
+        "icon": "TrendingUp",
+        "type": "income",
+        "subCategories": [
+          "Stocks",
+          "Crypto",
+          "Real Estate"
+        ]
+      },
+      {
+        "id": "cat-adi",
+        "name": "Adi",
+        "icon": "Circle",
+        "type": "expense",
+        "subCategories": []
+      },
+      {
+        "id": "cat-amazon",
+        "name": "Amazon",
+        "icon": "Circle",
+        "type": "expense",
+        "subCategories": []
+      },
+      {
+        "id": "cat-miscellaneous",
+        "name": "Miscellaneous",
+        "icon": "Circle",
+        "type": "expense",
+        "subCategories": []
+      },
+      {
+        "id": "cat-vices",
+        "name": "Vices",
+        "icon": "Circle",
+        "type": "expense",
+        "subCategories": [
+          "Sutta",
+          "Alcohol",
+          "Ganja",
+          "Hash"
+        ]
+      }
+    ],
+    "accounts": [
+      {
+        "id": "acc-cash",
+        "name": "Cash",
+        "type": "cash"
+      },
+      {
+        "id": "acc-hdfc-upi",
+        "name": "HDFC UPI",
+        "type": "bank"
+      },
+      {
+        "id": "acc-pnb-upi",
+        "name": "PNB UPI",
+        "type": "bank"
+      },
+      {
+        "id": "acc-slice-upi",
+        "name": "Slice UPI",
+        "type": "bank"
+      },
+      {
+        "id": "acc-diners-hdfc",
+        "name": "Diners HDFC",
+        "type": "card"
+      },
+      {
+        "id": "acc-icici-sapphiro-mastercard",
+        "name": "ICICI Sapphiro MasterCard",
+        "type": "card"
+      },
+      {
+        "id": "acc-icici-sapphiro-amex",
+        "name": "ICICI Sapphiro Amex",
+        "type": "card"
+      },
+      {
+        "id": "acc-swiggy-hdfc",
+        "name": "Swiggy HDFC",
+        "type": "card"
+      },
+      {
+        "id": "acc-amazon-icici-card",
+        "name": "Amazon ICICI Card",
+        "type": "card"
+      },
+      {
+        "id": "acc-yes-bank-kiwi-card",
+        "name": "Yes Bank Kiwi Card",
+        "type": "card"
+      },
+      {
+        "id": "acc-kotak-card",
+        "name": "Kotak Card",
+        "type": "card"
+      }
+    ]
+  }
+}
