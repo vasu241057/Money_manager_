@@ -71,14 +71,14 @@
   top: 8px;
   bottom: 8px;
   display: grid;
-  gap: 2px;
+  gap: 1px;
   align-items: center;
 }
 
 .voice-wave-bar {
-  width: 100%;
-  min-height: 2px;
-  border-radius: 999px;
+  width: 2px;
+  min-height: 1px;
+  border-radius: 2px;
   background: rgba(255, 255, 255, 0.95);
   justify-self: center;
   transition: height 0.08s linear, opacity 0.08s linear;

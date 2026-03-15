@@ -17,7 +17,7 @@ import { Button } from './ui/Button';
 import '../styles/voice-transaction-modal.css';
 
 type RecordingState = 'idle' | 'recording' | 'processing' | 'review' | 'error';
-const VOICE_WAVE_BAR_COUNT = 96;
+const VOICE_WAVE_BAR_COUNT = 180;
 
 interface VoiceTransactionModalProps {
   categories: Category[];
